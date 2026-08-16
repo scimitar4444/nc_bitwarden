@@ -1,8 +1,10 @@
 <?php
 
+declare(strict_types=1);
 
 namespace OCA\NcBitwarden\Service;
 
+use JsonException;
 use OCP\Http\Client\IClientService;
 use OCP\ISession;
 
@@ -12,13 +14,20 @@ final class VaultwardenProxyService {
 	private const SESSION_EXPIRY_KEY = 'bw_token_expiry';
 	private const SESSION_PROVIDER_KEY = 'bw_provider_fingerprint';
 
+	private const CLIENT_VERSION = '2026.7.0';
+
 	private array $baseOptions = [
 		'allow_redirects' => false,
 		'timeout' => 15,
 		'connect_timeout' => 10,
 	];
 
-	private const CLIENT_VERSION = '2026.7.0';
+	public function __construct(
+		private IClientService $httpClientService,
+		private ISession $session,
+		private UserSettingsService $settingsService,
+	) {
+	}
 
 	private function clientHeaders(array $headers = []): array {
 		return array_merge(
@@ -29,136 +38,189 @@ final class VaultwardenProxyService {
 		);
 	}
 
-	public function __construct(
-		private IClientService $httpClientService,
-		private ISession $session,
-		private UserSettingsService $settingsService,
-	) {
-	}
-
 	/**
-	 * Prelogin: KDF-Parameter abrufen
-	 * Endpunkt seit Nov 2022: POST {identity}/accounts/prelogin
+	 * Retrieve provider KDF parameters.
 	 */
 	public function prelogin(string $userId, string $email): array {
 		$this->assertClassicLoginAllowed($userId);
 
+		$email = trim($email);
+
+		if (
+			$email === ''
+			|| filter_var($email, FILTER_VALIDATE_EMAIL) === false
+		) {
+			throw new \RuntimeException(
+				'Ungültige E-Mail-Adresse.',
+				400,
+			);
+		}
+
 		$urls = $this->settingsService->getApiUrls($userId);
 		$client = $this->httpClientService->newClient();
+
 		try {
 			$response = $client->post(
 				$urls['identity'] . '/accounts/prelogin',
-				array_merge($this->baseOptions, [
-					'json' => ['email' => $email],
-					'headers' => $this->clientHeaders([
-						'Content-Type' => 'application/json',
-					]),
-				])
+				array_merge(
+					$this->baseOptions,
+					[
+						'json' => ['email' => $email],
+						'headers' => $this->clientHeaders([
+							'Content-Type' => 'application/json',
+						]),
+					],
+				),
 			);
-			$data = json_decode($this->responseBodyToString($response->getBody()), true);
-			if (!is_array($data)) {
-				throw new \RuntimeException('Ungueltiger Server-Response (kein JSON)');
-			}
-			return $data;
-		} catch (\Exception $e) {
-			throw new \RuntimeException($this->extractErrorMessage($e), 0, $e);
+
+			return $this->decodeJsonBody(
+				$response->getBody(),
+				'Prelogin-Antwort',
+			);
+		} catch (\Exception $exception) {
+			$status = (int)$exception->getCode();
+
+			throw new \RuntimeException(
+				$this->extractErrorMessage($exception),
+				$status >= 400 && $status <= 599
+					? $status
+					: 0,
+				$exception,
+			);
 		}
 	}
 
 	/**
-	 * Login: POST {identity}/connect/token  (OAuth2 Password Grant)
+	 * OAuth2 password-grant login.
 	 */
-	public function login(string $userId, array $credentials): array {
+	public function login(
+		string $userId,
+		array $credentials,
+	): array {
 		$this->assertClassicLoginAllowed($userId);
+
+		$email = trim(
+			(string)($credentials['email'] ?? ''),
+		);
+		$passwordHash = trim(
+			(string)($credentials['passwordHash'] ?? ''),
+		);
+
+		if ($email === '' || $passwordHash === '') {
+			throw new \RuntimeException(
+				'E-Mail-Adresse und Passwort-Hash sind erforderlich.',
+				400,
+			);
+		}
 
 		$urls = $this->settingsService->getApiUrls($userId);
 		$settings = $this->settingsService->getSettings($userId);
 		$client = $this->httpClientService->newClient();
+
 		$formParams = [
 			'grant_type' => 'password',
-			'username' => $credentials['email'],
-			'password' => $credentials['passwordHash'],
+			'username' => $email,
+			'password' => $passwordHash,
 			'scope' => 'api offline_access',
 			'client_id' => 'web',
 			'deviceType' => 10,
 			'deviceIdentifier' => $settings['device_id'],
-			'deviceName' => 'Nextcloud Bitwarden App',
+			'deviceName' => 'Nextcloud Warden',
 		];
 
 		if (!empty($credentials['twoFactorToken'])) {
-			$formParams['twoFactorProvider'] = (int)($credentials['twoFactorProvider'] ?? 0);
-			$formParams['twoFactorToken'] = $credentials['twoFactorToken'];
-			$formParams['twoFactorRemember'] = !empty($credentials['twoFactorRemember']) ? '1' : '0';
+			$formParams['twoFactorProvider'] = (int)(
+				$credentials['twoFactorProvider'] ?? 0
+			);
+			$formParams['twoFactorToken'] = trim(
+				(string)$credentials['twoFactorToken'],
+			);
+			$formParams['twoFactorRemember'] =
+				!empty($credentials['twoFactorRemember'])
+					? '1'
+					: '0';
 		}
 
 		try {
 			$response = $client->post(
 				$urls['identity'] . '/connect/token',
-				array_merge($this->baseOptions, [
-					'headers' => $this->clientHeaders(),
-					'form_params' => $formParams,
-				])
+				array_merge(
+					$this->baseOptions,
+					[
+						'headers' => $this->clientHeaders(),
+						'form_params' => $formParams,
+					],
+				),
 			);
-		} catch (\Exception $e) {
-			if (method_exists($e, 'getResponse') && ($resp = $e->getResponse()) !== null) {
-				$body = json_decode($this->responseBodyToString($resp->getBody()), true);
+		} catch (\Exception $exception) {
+			if (
+				method_exists($exception, 'getResponse')
+				&& ($errorResponse = $exception->getResponse()) !== null
+			) {
+				$body = $this->decodeJsonBodyTolerantly(
+					$errorResponse->getBody(),
+				);
 
-				if (is_array($body)) {
-					$customResponse = $body['CustomResponse']
+				$customResponse = is_array($body)
+					? (
+						$body['CustomResponse']
 						?? $body['customResponse']
-						?? [];
+						?? []
+					)
+					: [];
 
-					$providers = $body['TwoFactorProviders']
+				$providers = is_array($body)
+					? (
+						$body['TwoFactorProviders']
 						?? $body['twoFactorProviders']
 						?? $customResponse['TwoFactorProviders']
 						?? $customResponse['twoFactorProviders']
-						?? null;
+						?? null
+					)
+					: null;
 
-					if (is_array($providers)) {
-						return [
-							'twoFactorRequired' => true,
-							'twoFactorProviders' => array_map('intval', $providers),
-							'error' => $body['error'] ?? 'invalid_grant',
-							'error_description' => $body['error_description']
-								?? 'Two factor required.',
-						];
-					}
+				if (is_array($providers)) {
+					return [
+						'twoFactorRequired' => true,
+						'twoFactorProviders' => array_values(
+							array_unique(
+								array_map('intval', $providers),
+							),
+						),
+						'error' => $body['error'] ?? 'invalid_grant',
+						'error_description' =>
+							$body['error_description']
+							?? 'Two factor required.',
+					];
 				}
 			}
 
-			throw new \RuntimeException($this->extractErrorMessage($e), 0, $e);
+			throw new \RuntimeException(
+				$this->extractErrorMessage($exception),
+				0,
+				$exception,
+			);
 		}
-		$data = json_decode($this->responseBodyToString($response->getBody()), true);
+
+		$data = $this->decodeJsonBody(
+			$response->getBody(),
+			'Login-Antwort',
+		);
+
 		if (empty($data['access_token'])) {
 			throw new \RuntimeException(
-				$data['error_description'] ?? $data['error'] ?? 'Login fehlgeschlagen'
-			);
-		}
-		$this->session->set(
-			self::SESSION_TOKEN_KEY,
-			(string)$data['access_token'],
-		);
-		$this->session->set(
-			self::SESSION_EXPIRY_KEY,
-			time() + (int)($data['expires_in'] ?? 3600),
-		);
-
-		if (!empty($data['refresh_token'])) {
-			$this->session->set(
-				self::SESSION_REFRESH_KEY,
-				(string)$data['refresh_token'],
+				(string)(
+					$data['error_description']
+					?? $data['error']
+					?? 'Login fehlgeschlagen'
+				),
 			);
 		}
 
-		$this->session->set(
-			self::SESSION_PROVIDER_KEY,
-			$this->providerFingerprintFromUrls($urls),
-		);
+		$this->storeTokenResponse($urls, $data);
 
 		/*
-		 * Access- und Refresh-Token bleiben ausschließlich in der
-		 * serverseitigen Nextcloud-Sitzung. Der Browser benötigt nur
-		 * die kryptografischen Entsperrparameter.
+		 * Tokens remain in the server-side Nextcloud session.
 		 */
 		unset(
 			$data['access_token'],
@@ -174,48 +236,56 @@ final class VaultwardenProxyService {
 	public function refreshToken(string $userId): void {
 		$this->assertTokenProviderMatches($userId);
 
-		$refreshToken = $this->session->get(self::SESSION_REFRESH_KEY);
-		if (!$refreshToken) {
-			throw new \RuntimeException('Kein Refresh-Token – bitte erneut einloggen.');
+		$refreshToken = trim(
+			(string)($this->session->get(
+				self::SESSION_REFRESH_KEY,
+			) ?? ''),
+		);
+
+		if ($refreshToken === '') {
+			throw new \RuntimeException(
+				'Kein Refresh-Token – bitte erneut einloggen.',
+				401,
+			);
 		}
+
 		$urls = $this->settingsService->getApiUrls($userId);
 		$client = $this->httpClientService->newClient();
+
 		try {
 			$response = $client->post(
 				$urls['identity'] . '/connect/token',
-				array_merge($this->baseOptions, [
-					'headers' => $this->clientHeaders(),
-					'form_params' => [
-						'grant_type' => 'refresh_token',
-						'refresh_token' => $refreshToken,
-						'client_id' => 'web',
+				array_merge(
+					$this->baseOptions,
+					[
+						'headers' => $this->clientHeaders(),
+						'form_params' => [
+							'grant_type' => 'refresh_token',
+							'refresh_token' => $refreshToken,
+							'client_id' => 'web',
+						],
 					],
-				])
+				),
 			);
-		} catch (\Exception $e) {
-			$this->logout();
 
-			throw new \RuntimeException(
-				$this->extractErrorMessage($e),
-				401,
-				$e,
-			);
-		}
-		$data = json_decode(
-			$this->responseBodyToString(
+			$data = $this->decodeJsonBody(
 				$response->getBody(),
-			),
-			true,
-		);
+				'Token-Refresh-Antwort',
+			);
 
-		if (
-			!is_array($data)
-			|| empty($data['access_token'])
-		) {
+			if (empty($data['access_token'])) {
+				throw new \RuntimeException(
+					'Ungültige Antwort beim Erneuern der Sitzung.',
+					502,
+				);
+			}
+		} catch (\Exception $exception) {
 			$this->logout();
 
 			throw new \RuntimeException(
-				'Ungültige Antwort beim Erneuern der Sitzung.',
+				$this->extractErrorMessage($exception),
+				401,
+				$exception,
 			);
 		}
 
@@ -225,14 +295,9 @@ final class VaultwardenProxyService {
 		);
 		$this->session->set(
 			self::SESSION_EXPIRY_KEY,
-			time() + (int)($data['expires_in'] ?? 3600),
+			time() + $this->expiresIn($data),
 		);
 
-		/*
-		 * Manche OAuth-Server rotieren das Refresh-Token bei jedem
-		 * erfolgreichen Refresh. Das neue Token muss dann das alte
-		 * Token ersetzen.
-		 */
 		if (!empty($data['refresh_token'])) {
 			$this->session->set(
 				self::SESSION_REFRESH_KEY,
@@ -249,66 +314,71 @@ final class VaultwardenProxyService {
 	}
 
 	/**
-	 * Vault-API: GET/POST/PUT/DELETE {api}/...
+	 * Proxy a JSON Vault API request.
 	 */
-	public function apiRequest(string $userId, string $method, string $path, array $body = []): array {
+	public function apiRequest(
+		string $userId,
+		string $method,
+		string $path,
+		array $body = [],
+	): array {
 		$this->ensureValidToken($userId);
+
 		$urls = $this->settingsService->getApiUrls($userId);
-		$token = $this->session->get(self::SESSION_TOKEN_KEY);
+		$token = (string)$this->session->get(
+			self::SESSION_TOKEN_KEY,
+		);
 		$client = $this->httpClientService->newClient();
-		$options = array_merge($this->baseOptions, [
-			'headers' => $this->clientHeaders([
-				'Authorization' => 'Bearer ' . $token,
-				'Content-Type' => 'application/json',
-			]),
-		]);
-		if (!empty($body)) {
-			$options['json'] = $body;
-		}
-		try {
-			$response = match(strtoupper($method)) {
-				'GET' => $client->get($urls['api'] . $path, $options),
-				'POST' => $client->post($urls['api'] . $path, $options),
-				'PUT' => $client->put($urls['api'] . $path, $options),
-				'DELETE' => $client->delete($urls['api'] . $path, $options),
-				default => throw new \InvalidArgumentException("Unbekannte HTTP-Methode: $method"),
-			};
-		} catch (\Exception $e) {
-			$status = 502;
 
-			if (
-				method_exists($e, 'getResponse')
-				&& ($errorResponse = $e->getResponse()) !== null
-			) {
-				$upstreamStatus
-					= (int)$errorResponse->getStatusCode();
-
-				if (
-					$upstreamStatus >= 400
-					&& $upstreamStatus <= 599
-				) {
-					$status = $upstreamStatus;
-				}
-			}
-
-			throw new \RuntimeException(
-				$this->extractErrorMessage($e),
-				$status,
-				$e,
-			);
-		}
-		$responseBody = $this->responseBodyToString(
-			$response->getBody()
+		$options = array_merge(
+			$this->baseOptions,
+			[
+				'headers' => $this->clientHeaders([
+					'Authorization' => 'Bearer ' . $token,
+					'Content-Type' => 'application/json',
+				]),
+			],
 		);
 
-		return $responseBody !== ''
-			? (json_decode($responseBody, true) ?? [])
-			: [];
+		if ($body !== []) {
+			$options['json'] = $body;
+		}
+
+		try {
+			$response = match (strtoupper($method)) {
+				'GET' => $client->get(
+					$urls['api'] . $path,
+					$options,
+				),
+				'POST' => $client->post(
+					$urls['api'] . $path,
+					$options,
+				),
+				'PUT' => $client->put(
+					$urls['api'] . $path,
+					$options,
+				),
+				'DELETE' => $client->delete(
+					$urls['api'] . $path,
+					$options,
+				),
+				default => throw new \InvalidArgumentException(
+					"Unbekannte HTTP-Methode: {$method}",
+				),
+			};
+		} catch (\Exception $exception) {
+			throw $this->wrappedApiException($exception);
+		}
+
+		return $this->decodeJsonBody(
+			$response->getBody(),
+			'Vault-API-Antwort',
+			true,
+		);
 	}
 
-
 	/**
-	 * Lädt bereits im Browser verschlüsselte Anhangsdaten hoch.
+	 * Upload browser-encrypted attachment data.
 	 */
 	public function uploadAttachment(
 		string $userId,
@@ -320,7 +390,9 @@ final class VaultwardenProxyService {
 		$this->ensureValidToken($userId);
 
 		$urls = $this->settingsService->getApiUrls($userId);
-		$token = $this->session->get(self::SESSION_TOKEN_KEY);
+		$token = (string)$this->session->get(
+			self::SESSION_TOKEN_KEY,
+		);
 		$client = $this->httpClientService->newClient();
 		$handle = fopen($temporaryPath, 'rb');
 
@@ -342,10 +414,13 @@ final class VaultwardenProxyService {
 					[
 						'name' => 'data',
 						'contents' => $handle,
-						'filename' => $encryptedFileName ?: 'data',
+						'filename' =>
+							$encryptedFileName !== ''
+								? $encryptedFileName
+								: 'data',
 						'headers' => [
-							'Content-Type'
-								=> 'application/octet-stream',
+							'Content-Type' =>
+								'application/octet-stream',
 						],
 					],
 				],
@@ -355,29 +430,27 @@ final class VaultwardenProxyService {
 		try {
 			$response = $client->post(
 				$urls['api']
-				. "/ciphers/$cipherId"
-				. "/attachment/$attachmentId",
+				. "/ciphers/{$cipherId}"
+				. "/attachment/{$attachmentId}",
 				$options,
 			);
-		} catch (\Exception $e) {
-			throw $this->wrappedApiException($e);
+		} catch (\Exception $exception) {
+			throw $this->wrappedApiException($exception);
 		} finally {
 			if (is_resource($handle)) {
 				fclose($handle);
 			}
 		}
 
-		$responseBody = $this->responseBodyToString(
+		return $this->decodeJsonBody(
 			$response->getBody(),
+			'Anhangs-Upload-Antwort',
+			true,
 		);
-
-		return $responseBody !== ''
-			? (json_decode($responseBody, true) ?? [])
-			: [];
 	}
 
 	/**
-	 * Lädt ausschließlich die verschlüsselten Binärdaten herunter.
+	 * Download only the encrypted attachment bytes.
 	 */
 	public function downloadAttachment(
 		string $userId,
@@ -387,14 +460,11 @@ final class VaultwardenProxyService {
 		$this->ensureValidToken($userId);
 
 		$urls = $this->settingsService->getApiUrls($userId);
-		$token = $this->session->get(self::SESSION_TOKEN_KEY);
+		$token = (string)$this->session->get(
+			self::SESSION_TOKEN_KEY,
+		);
 		$client = $this->httpClientService->newClient();
 
-		/*
-		 * Vaultwardens Attachment-Endpoint liefert zunächst
-		 * Metadaten als JSON. Darin steht die URL zur wirklich
-		 * verschlüsselten Binärdatei.
-		 */
 		$metadataOptions = array_merge(
 			$this->baseOptions,
 			[
@@ -408,34 +478,27 @@ final class VaultwardenProxyService {
 		);
 
 		$metadataUrl = $urls['api']
-			. "/ciphers/$cipherId"
-			. "/attachment/$attachmentId";
+			. "/ciphers/{$cipherId}"
+			. "/attachment/{$attachmentId}";
 
 		try {
 			$metadataResponse = $client->get(
 				$metadataUrl,
 				$metadataOptions,
 			);
-		} catch (\Exception $e) {
-			throw $this->wrappedApiException($e);
+		} catch (\Exception $exception) {
+			throw $this->wrappedApiException($exception);
 		}
 
-		$metadataBody = $this->responseBodyToString(
+		$metadata = $this->decodeJsonBody(
 			$metadataResponse->getBody(),
+			'Anhangs-Metadaten',
 		);
 
-		$metadata = json_decode(
-			$metadataBody,
-			true,
-		);
-
-		$downloadUrl = is_array($metadata)
-			? (
-				$metadata['url']
-				?? $metadata['Url']
-				?? null
-			)
-			: null;
+		$downloadUrl =
+			$metadata['url']
+			?? $metadata['Url']
+			?? null;
 
 		if (
 			!is_string($downloadUrl)
@@ -443,21 +506,15 @@ final class VaultwardenProxyService {
 		) {
 			throw new \RuntimeException(
 				'Vaultwarden hat keine Download-URL '
-					. 'für den Anhang zurückgegeben.',
+				. 'für den Anhang zurückgegeben.',
 				502,
 			);
 		}
 
 		$downloadUrl = trim($downloadUrl);
 
-		/*
-		 * Aktuelle Vaultwarden-Versionen liefern normalerweise
-		 * eine absolute URL. Relative URLs werden vorsorglich
-		 * gegen den API-Host aufgelöst.
-		 */
 		if (str_starts_with($downloadUrl, '/')) {
 			$apiParts = parse_url($urls['api']);
-
 			$scheme = $apiParts['scheme'] ?? null;
 			$host = $apiParts['host'] ?? null;
 			$port = isset($apiParts['port'])
@@ -466,8 +523,7 @@ final class VaultwardenProxyService {
 
 			if (!$scheme || !$host) {
 				throw new \RuntimeException(
-					'Die Vaultwarden-API-Adresse '
-						. 'ist ungültig.',
+					'Die Vaultwarden-API-Adresse ist ungültig.',
 					502,
 				);
 			}
@@ -480,29 +536,23 @@ final class VaultwardenProxyService {
 				. $downloadUrl;
 		}
 
-		$downloadScheme = strtolower(
-			(string)parse_url(
+		if (
+			strtolower((string)parse_url(
 				$downloadUrl,
 				PHP_URL_SCHEME,
-			),
-		);
-
-		if ($downloadScheme !== 'https') {
+			)) !== 'https'
+		) {
 			throw new \RuntimeException(
 				'The attachment download URL must use HTTPS.',
 				502,
 			);
 		}
 
-		$this->assertSafeDownloadUrl($downloadUrl, $urls['api']);
+		$this->assertSafeDownloadUrl(
+			$downloadUrl,
+			$urls['api'],
+		);
 
-		/*
-		 * Für diese URL keine Authorization mitsenden:
-		 *
-		 * - lokales Vaultwarden nutzt einen Download-Token
-		 *   in der URL;
-		 * - externe Objektspeicher nutzen eine signierte URL.
-		 */
 		$downloadOptions = array_merge(
 			$this->baseOptions,
 			[
@@ -517,8 +567,8 @@ final class VaultwardenProxyService {
 				$downloadUrl,
 				$downloadOptions,
 			);
-		} catch (\Exception $e) {
-			throw $this->wrappedApiException($e);
+		} catch (\Exception $exception) {
+			throw $this->wrappedApiException($exception);
 		}
 
 		$statusCode = (int)$fileResponse->getStatusCode();
@@ -535,6 +585,53 @@ final class VaultwardenProxyService {
 		);
 	}
 
+	private function storeTokenResponse(
+		array $urls,
+		array $data,
+	): void {
+		$this->session->set(
+			self::SESSION_TOKEN_KEY,
+			(string)$data['access_token'],
+		);
+		$this->session->set(
+			self::SESSION_EXPIRY_KEY,
+			time() + $this->expiresIn($data),
+		);
+
+		if (!empty($data['refresh_token'])) {
+			$this->session->set(
+				self::SESSION_REFRESH_KEY,
+				(string)$data['refresh_token'],
+			);
+		} else {
+			$this->session->remove(
+				self::SESSION_REFRESH_KEY,
+			);
+		}
+
+		$this->session->set(
+			self::SESSION_PROVIDER_KEY,
+			$this->providerFingerprintFromUrls($urls),
+		);
+	}
+
+	private function expiresIn(array $data): int {
+		$expiresIn = filter_var(
+			$data['expires_in'] ?? 3600,
+			FILTER_VALIDATE_INT,
+			[
+				'options' => [
+					'min_range' => 1,
+					'max_range' => 86400,
+				],
+			],
+		);
+
+		return $expiresIn === false
+			? 3600
+			: $expiresIn;
+	}
+
 	private function assertSafeDownloadUrl(
 		string $url,
 		string $providerApiUrl,
@@ -544,8 +641,7 @@ final class VaultwardenProxyService {
 
 		if (
 			$parts === false
-			|| strtolower((string)($parts['scheme'] ?? ''))
-				!== 'https'
+			|| strtolower((string)($parts['scheme'] ?? '')) !== 'https'
 			|| empty($parts['host'])
 			|| isset($parts['user'])
 			|| isset($parts['pass'])
@@ -569,35 +665,24 @@ final class VaultwardenProxyService {
 		$host = strtolower(
 			rtrim((string)$parts['host'], '.'),
 		);
-
 		$providerHost = strtolower(
-			rtrim(
-				(string)$providerParts['host'],
-				'.',
-			),
+			rtrim((string)$providerParts['host'], '.'),
 		);
 
 		$downloadPort = isset($parts['port'])
 			? (int)$parts['port']
 			: 443;
-
 		$providerPort = isset($providerParts['port'])
 			? (int)$providerParts['port']
 			: 443;
 
 		$isProviderEndpoint = (
-			hash_equals(
-				$providerHost,
-				$host,
-			)
+			hash_equals($providerHost, $host)
 			&& $providerPort === $downloadPort
 		);
 
 		if (
-			filter_var(
-				$host,
-				FILTER_VALIDATE_IP,
-			) !== false
+			filter_var($host, FILTER_VALIDATE_IP) !== false
 			&& !$isProviderEndpoint
 		) {
 			throw new \RuntimeException(
@@ -619,14 +704,8 @@ final class VaultwardenProxyService {
 			if (
 				!$isProviderEndpoint
 				&& (
-					$host === ltrim(
-						$blockedSuffix,
-						'.',
-					)
-					|| str_ends_with(
-						$host,
-						$blockedSuffix,
-					)
+					$host === ltrim($blockedSuffix, '.')
+					|| str_ends_with($host, $blockedSuffix)
 				)
 			) {
 				throw new \RuntimeException(
@@ -637,7 +716,6 @@ final class VaultwardenProxyService {
 		}
 
 		$addresses = [];
-
 		$records = @dns_get_record(
 			$host,
 			DNS_A | DNS_AAAA,
@@ -645,7 +723,8 @@ final class VaultwardenProxyService {
 
 		if (is_array($records)) {
 			foreach ($records as $record) {
-				$address = $record['ip']
+				$address =
+					$record['ip']
 					?? $record['ipv6']
 					?? null;
 
@@ -656,9 +735,7 @@ final class VaultwardenProxyService {
 		}
 
 		if ($addresses === []) {
-			$ipv4Addresses = @gethostbynamel(
-				$host,
-			);
+			$ipv4Addresses = @gethostbynamel($host);
 
 			if (is_array($ipv4Addresses)) {
 				$addresses = $ipv4Addresses;
@@ -672,11 +749,6 @@ final class VaultwardenProxyService {
 			);
 		}
 
-		/*
-		 * The configured provider host is already an explicitly
-		 * selected server. External storage hosts must additionally
-		 * resolve only to public addresses.
-		 */
 		if ($isProviderEndpoint) {
 			return;
 		}
@@ -687,7 +759,7 @@ final class VaultwardenProxyService {
 					$address,
 					FILTER_VALIDATE_IP,
 					FILTER_FLAG_NO_PRIV_RANGE
-						| FILTER_FLAG_NO_RES_RANGE,
+					| FILTER_FLAG_NO_RES_RANGE,
 				) === false
 			) {
 				throw new \RuntimeException(
@@ -739,7 +811,6 @@ final class VaultwardenProxyService {
 			(string)($urls['identity'] ?? ''),
 			'/',
 		);
-
 		$api = rtrim(
 			(string)($urls['api'] ?? ''),
 			'/',
@@ -766,9 +837,9 @@ final class VaultwardenProxyService {
 				self::SESSION_PROVIDER_KEY,
 			) ?? ''
 		);
-
-		$expectedFingerprint =
-			$this->providerFingerprint($userId);
+		$expectedFingerprint = $this->providerFingerprint(
+			$userId,
+		);
 
 		if (
 			$storedFingerprint === ''
@@ -796,8 +867,7 @@ final class VaultwardenProxyService {
 		);
 
 		if (
-			($settings['classic_login_allowed'] ?? false)
-			!== true
+			($settings['classic_login_allowed'] ?? false) !== true
 		) {
 			throw new \RuntimeException(
 				'Die klassische Anmeldung wurde '
@@ -808,10 +878,12 @@ final class VaultwardenProxyService {
 	}
 
 	private function ensureValidToken(string $userId): void {
-		$token = (string)(
-			$this->session->get(
-				self::SESSION_TOKEN_KEY,
-			) ?? ''
+		$token = trim(
+			(string)(
+				$this->session->get(
+					self::SESSION_TOKEN_KEY,
+				) ?? ''
+			),
 		);
 
 		if ($token === '') {
@@ -836,10 +908,76 @@ final class VaultwardenProxyService {
 		}
 	}
 
+	private function decodeJsonBody(
+		mixed $body,
+		string $context,
+		bool $allowEmpty = false,
+	): array {
+		$bodyString = $this->responseBodyToString($body);
+
+		if ($bodyString === '') {
+			if ($allowEmpty) {
+				return [];
+			}
+
+			throw new \RuntimeException(
+				"{$context} ist leer.",
+				502,
+			);
+		}
+
+		try {
+			$decoded = json_decode(
+				$bodyString,
+				true,
+				512,
+				JSON_THROW_ON_ERROR,
+			);
+		} catch (JsonException $exception) {
+			throw new \RuntimeException(
+				"{$context} enthält ungültiges JSON.",
+				502,
+				$exception,
+			);
+		}
+
+		if (!is_array($decoded)) {
+			throw new \RuntimeException(
+				"{$context} enthält kein JSON-Objekt.",
+				502,
+			);
+		}
+
+		return $decoded;
+	}
+
+	private function decodeJsonBodyTolerantly(
+		mixed $body,
+	): ?array {
+		$bodyString = $this->responseBodyToString($body);
+
+		if ($bodyString === '') {
+			return null;
+		}
+
+		try {
+			$decoded = json_decode(
+				$bodyString,
+				true,
+				512,
+				JSON_THROW_ON_ERROR,
+			);
+		} catch (JsonException) {
+			return null;
+		}
+
+		return is_array($decoded)
+			? $decoded
+			: null;
+	}
+
 	/**
 	 * Convert a Nextcloud HTTP response body into a string.
-	 *
-	 * @param mixed $body
 	 */
 	private function responseBodyToString(mixed $body): string {
 		if (is_resource($body)) {
@@ -848,26 +986,73 @@ final class VaultwardenProxyService {
 			return $contents === false ? '' : $contents;
 		}
 
-		return is_string($body) ? $body : '';
-	}
+		if (is_string($body)) {
+			return $body;
+		}
 
-	private function extractErrorMessage(\Exception $e): string {
-		if (method_exists($e, 'getResponse') && ($resp = $e->getResponse()) !== null) {
-			$bodyStr = $this->responseBodyToString($resp->getBody());
-			$data = json_decode($bodyStr, true);
-			if (isset($data['error_description'])) {
-				return $data['error_description'];
-			}
-			if (isset($data['message'])) {
-				return $data['message'];
-			}
-			if (isset($data['error'])) {
-				return $data['error'];
-			}
-			if ($resp->getStatusCode() === 404) {
-				return 'API-Endpunkt nicht gefunden (404) – URL in den Einstellungen pruefen';
+		if (
+			is_object($body)
+			&& method_exists($body, 'getContents')
+		) {
+			try {
+				$contents = $body->getContents();
+
+				return is_string($contents)
+					? $contents
+					: '';
+			} catch (\Throwable) {
+				return '';
 			}
 		}
-		return $e->getMessage();
+
+		if (
+			is_object($body)
+			&& method_exists($body, '__toString')
+		) {
+			try {
+				return (string)$body;
+			} catch (\Throwable) {
+				return '';
+			}
+		}
+
+		return '';
+	}
+
+	private function extractErrorMessage(
+		\Exception $exception,
+	): string {
+		if (
+			method_exists($exception, 'getResponse')
+			&& ($response = $exception->getResponse()) !== null
+		) {
+			$data = $this->decodeJsonBodyTolerantly(
+				$response->getBody(),
+			);
+
+			if (is_array($data)) {
+				foreach (
+					[
+						'error_description',
+						'message',
+						'error',
+					] as $key
+				) {
+					if (
+						isset($data[$key])
+						&& is_scalar($data[$key])
+					) {
+						return (string)$data[$key];
+					}
+				}
+			}
+
+			if ((int)$response->getStatusCode() === 404) {
+				return 'API-Endpunkt nicht gefunden (404) – '
+				. 'URL in den Einstellungen prüfen';
+			}
+		}
+
+		return $exception->getMessage();
 	}
 }

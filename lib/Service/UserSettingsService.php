@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace OCA\NcBitwarden\Service;
 
 use OCP\IConfig;
@@ -72,7 +74,11 @@ final class UserSettingsService {
 			'user_choice',
 		);
 
-		if (!in_array($tabUnlockMode, self::TAB_UNLOCK_MODES, true)) {
+		if (!in_array(
+			$tabUnlockMode,
+			self::TAB_UNLOCK_MODES,
+			true,
+		)) {
 			$tabUnlockMode = 'user_choice';
 		}
 
@@ -109,7 +115,8 @@ final class UserSettingsService {
 				self::TAB_UNLOCK_DEFAULT_KEY,
 				'1',
 			) !== '0',
-			'sso_password_min_length' => $this->getSsoPasswordMinLength(),
+			'sso_password_min_length' =>
+				$this->getSsoPasswordMinLength(),
 			'sso_password_require_lower' => $this->config->getAppValue(
 				$this->appName,
 				self::SSO_PASSWORD_REQUIRE_LOWER_KEY,
@@ -163,19 +170,20 @@ final class UserSettingsService {
 		];
 	}
 
-	/**
-	 * Warden-Richtlinie für die erstmalige Vergabe eines
-	 * Master-Passworts nach erfolgreicher SSO-Anmeldung.
-	 */
 	public function getNewSsoPasswordPolicy(): array {
 		$settings = $this->getAdminSettings();
 
 		return [
-			'min_length' => $settings['sso_password_min_length'],
-			'require_lower' => $settings['sso_password_require_lower'],
-			'require_upper' => $settings['sso_password_require_upper'],
-			'require_number' => $settings['sso_password_require_number'],
-			'require_special' => $settings['sso_password_require_special'],
+			'min_length' =>
+				$settings['sso_password_min_length'],
+			'require_lower' =>
+				$settings['sso_password_require_lower'],
+			'require_upper' =>
+				$settings['sso_password_require_upper'],
+			'require_number' =>
+				$settings['sso_password_require_number'],
+			'require_special' =>
+				$settings['sso_password_require_special'],
 		];
 	}
 
@@ -194,8 +202,14 @@ final class UserSettingsService {
 		bool $ssoPasswordRequireNumber,
 		bool $ssoPasswordRequireSpecial,
 	): void {
-		$customUrl = $this->normalizeCustomUrl($customUrl);
+		$customUrl = $this->normalizeCustomUrl(
+			$customUrl,
+		);
 
+		/*
+		 * Validate the complete request before the first write so a
+		 * rejected setting cannot leave a partially updated policy.
+		 */
 		$this->validateProviderSettings(
 			$serverType,
 			$customUrl,
@@ -217,21 +231,21 @@ final class UserSettingsService {
 			);
 		}
 
-		$passkeyUnlockEnabled = (
-			$passkeyUnlockEnabled
-			&& $ssoEnabled
-			&& $serverType === 'selfhosted'
-		);
-
-		if (!in_array($tabUnlockMode, self::TAB_UNLOCK_MODES, true)) {
+		if (!in_array(
+			$tabUnlockMode,
+			self::TAB_UNLOCK_MODES,
+			true,
+		)) {
 			throw new \InvalidArgumentException(
 				'Invalid value for tab_unlock_mode',
 			);
 		}
 
 		if (
-			$ssoPasswordMinLength < self::MIN_SSO_PASSWORD_LENGTH
-			|| $ssoPasswordMinLength > self::MAX_SSO_PASSWORD_LENGTH
+			$ssoPasswordMinLength
+				< self::MIN_SSO_PASSWORD_LENGTH
+			|| $ssoPasswordMinLength
+				> self::MAX_SSO_PASSWORD_LENGTH
 		) {
 			throw new \InvalidArgumentException(
 				$this->l->t(
@@ -240,86 +254,157 @@ final class UserSettingsService {
 			);
 		}
 
-		$this->config->setAppValue(
-			$this->appName,
-			self::DEFAULT_SERVER_TYPE_KEY,
-			$serverType,
+		$passkeyUnlockEnabled = (
+			$passkeyUnlockEnabled
+			&& $ssoEnabled
+			&& $serverType === 'selfhosted'
 		);
-		$this->config->setAppValue(
-			$this->appName,
-			self::DEFAULT_CUSTOM_URL_KEY,
-			$customUrl,
-		);
-		$allowUserOverride = $classicLoginAllowed && $allowUserOverride;
+		$allowUserOverride =
+			$classicLoginAllowed && $allowUserOverride;
 
-		$this->config->setAppValue(
-			$this->appName,
-			self::ALLOW_USER_OVERRIDE_KEY,
-			$allowUserOverride ? '1' : '0',
-		);
-		$this->config->setAppValue(
-			$this->appName,
-			self::SSO_ENABLED_KEY,
-			$ssoEnabled ? '1' : '0',
-		);
-		$this->config->setAppValue(
-			$this->appName,
-			self::CLASSIC_LOGIN_ALLOWED_KEY,
-			$classicLoginAllowed ? '1' : '0',
-		);
-		$this->config->setAppValue(
-			$this->appName,
-			self::PASSKEY_UNLOCK_ENABLED_KEY,
-			$passkeyUnlockEnabled ? '1' : '0',
-		);
-		$this->config->setAppValue(
-			$this->appName,
-			self::TAB_UNLOCK_MODE_KEY,
-			$tabUnlockMode,
-		);
-		$this->config->setAppValue(
-			$this->appName,
-			self::TAB_UNLOCK_DEFAULT_KEY,
-			$tabUnlockDefault ? '1' : '0',
-		);
-		$this->config->setAppValue(
-			$this->appName,
-			self::SSO_PASSWORD_MIN_LENGTH_KEY,
-			(string)$ssoPasswordMinLength,
-		);
-		$this->config->setAppValue(
-			$this->appName,
-			self::SSO_PASSWORD_REQUIRE_LOWER_KEY,
-			$ssoPasswordRequireLower ? '1' : '0',
-		);
-		$this->config->setAppValue(
-			$this->appName,
-			self::SSO_PASSWORD_REQUIRE_UPPER_KEY,
-			$ssoPasswordRequireUpper ? '1' : '0',
-		);
-		$this->config->setAppValue(
-			$this->appName,
-			self::SSO_PASSWORD_REQUIRE_NUMBER_KEY,
-			$ssoPasswordRequireNumber ? '1' : '0',
-		);
-		$this->config->setAppValue(
-			$this->appName,
-			self::SSO_PASSWORD_REQUIRE_SPECIAL_KEY,
-			$ssoPasswordRequireSpecial ? '1' : '0',
-		);
+		$values = [
+			self::DEFAULT_SERVER_TYPE_KEY => $serverType,
+			self::DEFAULT_CUSTOM_URL_KEY => $customUrl,
+			self::ALLOW_USER_OVERRIDE_KEY =>
+				$allowUserOverride ? '1' : '0',
+			self::SSO_ENABLED_KEY =>
+				$ssoEnabled ? '1' : '0',
+			self::CLASSIC_LOGIN_ALLOWED_KEY =>
+				$classicLoginAllowed ? '1' : '0',
+			self::PASSKEY_UNLOCK_ENABLED_KEY =>
+				$passkeyUnlockEnabled ? '1' : '0',
+			self::TAB_UNLOCK_MODE_KEY => $tabUnlockMode,
+			self::TAB_UNLOCK_DEFAULT_KEY =>
+				$tabUnlockDefault ? '1' : '0',
+			self::SSO_PASSWORD_MIN_LENGTH_KEY =>
+				(string)$ssoPasswordMinLength,
+			self::SSO_PASSWORD_REQUIRE_LOWER_KEY =>
+				$ssoPasswordRequireLower ? '1' : '0',
+			self::SSO_PASSWORD_REQUIRE_UPPER_KEY =>
+				$ssoPasswordRequireUpper ? '1' : '0',
+			self::SSO_PASSWORD_REQUIRE_NUMBER_KEY =>
+				$ssoPasswordRequireNumber ? '1' : '0',
+			self::SSO_PASSWORD_REQUIRE_SPECIAL_KEY =>
+				$ssoPasswordRequireSpecial ? '1' : '0',
+		];
+
+		foreach ($values as $key => $value) {
+			$this->config->setAppValue(
+				$this->appName,
+				$key,
+				$value,
+			);
+		}
 	}
-
 
 	public function getOrganizationNoticeSettings(): array {
 		$settings = $this->getAdminSettings();
 
 		return [
-			'enabled' => $settings['organization_notice_enabled'],
-			'title' => $settings['organization_notice_title'],
-			'message' => $settings['organization_notice_message'],
-			'support_url' => $settings['organization_notice_support_url'],
-			'support_label' => $settings['organization_notice_support_label'],
-			'support_email' => $settings['organization_notice_support_email'],
+			'enabled' =>
+				$settings['organization_notice_enabled'],
+			'title' =>
+				$settings['organization_notice_title'],
+			'message' =>
+				$settings['organization_notice_message'],
+			'support_url' =>
+				$settings['organization_notice_support_url'],
+			'support_label' =>
+				$settings['organization_notice_support_label'],
+			'support_email' =>
+				$settings['organization_notice_support_email'],
+		];
+	}
+
+	/**
+	 * Normalize and validate the organization notice without writing.
+	 * Controllers can use this before other settings are persisted.
+	 */
+	public function validateOrganizationNoticeSettings(
+		bool $enabled,
+		string $title,
+		string $message,
+		string $supportUrl,
+		string $supportLabel,
+		string $supportEmail,
+	): array {
+		$title = trim($title);
+		$message = trim($message);
+		$supportUrl = trim($supportUrl);
+		$supportLabel = trim($supportLabel);
+		$supportEmail = trim($supportEmail);
+
+		$this->validateTextLength(
+			$title,
+			160,
+			'Organization notice title',
+		);
+		$this->validateTextLength(
+			$message,
+			2000,
+			'Organization notice message',
+		);
+		$this->validateTextLength(
+			$supportLabel,
+			120,
+			'Organization notice support label',
+		);
+
+		if ($supportUrl !== '') {
+			if (
+				filter_var(
+					$supportUrl,
+					FILTER_VALIDATE_URL,
+				) === false
+			) {
+				throw new \InvalidArgumentException(
+					$this->l->t(
+						'Enter a valid support URL',
+					),
+				);
+			}
+
+			$scheme = strtolower(
+				(string)parse_url(
+					$supportUrl,
+					PHP_URL_SCHEME,
+				),
+			);
+
+			if (!in_array(
+				$scheme,
+				['http', 'https'],
+				true,
+			)) {
+				throw new \InvalidArgumentException(
+					$this->l->t(
+						'Only HTTP or HTTPS support URLs are allowed',
+					),
+				);
+			}
+		}
+
+		if (
+			$supportEmail !== ''
+			&& filter_var(
+				$supportEmail,
+				FILTER_VALIDATE_EMAIL,
+			) === false
+		) {
+			throw new \InvalidArgumentException(
+				$this->l->t(
+					'Enter a valid support email address',
+				),
+			);
+		}
+
+		return [
+			'enabled' => $enabled,
+			'title' => $title,
+			'message' => $message,
+			'support_url' => $supportUrl,
+			'support_label' => $supportLabel,
+			'support_email' => $supportEmail,
 		];
 	}
 
@@ -331,51 +416,36 @@ final class UserSettingsService {
 		string $supportLabel,
 		string $supportEmail,
 	): void {
-		$title = trim($title);
-		$message = trim($message);
-		$supportUrl = trim($supportUrl);
-		$supportLabel = trim($supportLabel);
-		$supportEmail = trim($supportEmail);
-
-		$this->validateTextLength($title, 160, 'Organization notice title');
-		$this->validateTextLength($message, 2000, 'Organization notice message');
-		$this->validateTextLength($supportLabel, 120, 'Organization notice support label');
-
-		if ($supportUrl !== '') {
-			if (filter_var($supportUrl, FILTER_VALIDATE_URL) === false) {
-				throw new \InvalidArgumentException(
-					$this->l->t('Enter a valid support URL'),
-				);
-			}
-
-			$scheme = strtolower((string)parse_url($supportUrl, PHP_URL_SCHEME));
-			if (!in_array($scheme, ['http', 'https'], true)) {
-				throw new \InvalidArgumentException(
-					$this->l->t('Only HTTP or HTTPS support URLs are allowed'),
-				);
-			}
-		}
-
-		if (
-			$supportEmail !== ''
-			&& filter_var($supportEmail, FILTER_VALIDATE_EMAIL) === false
-		) {
-			throw new \InvalidArgumentException(
-				$this->l->t('Enter a valid support email address'),
-			);
-		}
+		$settings = $this->validateOrganizationNoticeSettings(
+			$enabled,
+			$title,
+			$message,
+			$supportUrl,
+			$supportLabel,
+			$supportEmail,
+		);
 
 		$values = [
-			self::ORGANIZATION_NOTICE_ENABLED_KEY => $enabled ? '1' : '0',
-			self::ORGANIZATION_NOTICE_TITLE_KEY => $title,
-			self::ORGANIZATION_NOTICE_MESSAGE_KEY => $message,
-			self::ORGANIZATION_NOTICE_SUPPORT_URL_KEY => $supportUrl,
-			self::ORGANIZATION_NOTICE_SUPPORT_LABEL_KEY => $supportLabel,
-			self::ORGANIZATION_NOTICE_SUPPORT_EMAIL_KEY => $supportEmail,
+			self::ORGANIZATION_NOTICE_ENABLED_KEY =>
+				$settings['enabled'] ? '1' : '0',
+			self::ORGANIZATION_NOTICE_TITLE_KEY =>
+				$settings['title'],
+			self::ORGANIZATION_NOTICE_MESSAGE_KEY =>
+				$settings['message'],
+			self::ORGANIZATION_NOTICE_SUPPORT_URL_KEY =>
+				$settings['support_url'],
+			self::ORGANIZATION_NOTICE_SUPPORT_LABEL_KEY =>
+				$settings['support_label'],
+			self::ORGANIZATION_NOTICE_SUPPORT_EMAIL_KEY =>
+				$settings['support_email'],
 		];
 
 		foreach ($values as $key => $value) {
-			$this->config->setAppValue($this->appName, $key, $value);
+			$this->config->setAppValue(
+				$this->appName,
+				$key,
+				$value,
+			);
 		}
 	}
 
@@ -411,7 +481,9 @@ final class UserSettingsService {
 	}
 
 	public function getSettings(string $userId): array {
-		$provider = $this->resolveProviderSettings($userId);
+		$provider = $this->resolveProviderSettings(
+			$userId,
+		);
 		$adminSettings = $this->getAdminSettings();
 
 		$effectiveSso = (
@@ -446,18 +518,25 @@ final class UserSettingsService {
 				$effectiveSso
 				&& $adminSettings['passkey_unlock_enabled']
 			),
-			'tab_unlock_mode' => $adminSettings['tab_unlock_mode'],
-			'tab_unlock_default' => $adminSettings['tab_unlock_default'],
-			'organization_notice' => $this->getOrganizationNoticeSettings(),
-			'master_password_policy' => $this->getNewSsoPasswordPolicy(),
-			'preferences' => $this->getUserPreferences($userId),
+			'tab_unlock_mode' =>
+				$adminSettings['tab_unlock_mode'],
+			'tab_unlock_default' =>
+				$adminSettings['tab_unlock_default'],
+			'organization_notice' =>
+				$this->getOrganizationNoticeSettings(),
+			'master_password_policy' =>
+				$this->getNewSsoPasswordPolicy(),
+			'preferences' =>
+				$this->getUserPreferences($userId),
 		];
 	}
 
 	public function isPasskeyUnlockEnabled(
 		string $userId,
 	): bool {
-		$provider = $this->resolveProviderSettings($userId);
+		$provider = $this->resolveProviderSettings(
+			$userId,
+		);
 		$adminSettings = $this->getAdminSettings();
 
 		return (
@@ -475,38 +554,12 @@ final class UserSettingsService {
 		string $loginEmail,
 	): void {
 		$adminSettings = $this->getAdminSettings();
-
-		/*
-		 * Die persönliche Serverauswahl darf nur verändert werden,
-		 * wenn der Administrator dies erlaubt.
-		 *
-		 * Die persönliche Anmelde-E-Mail bleibt davon unabhängig
-		 * immer bearbeitbar.
-		 */
-		if ($adminSettings['allow_user_override']) {
-			$customUrl = $this->normalizeCustomUrl($customUrl);
-
-			$this->validateProviderSettings(
-				$serverType,
-				$customUrl,
-			);
-
-			$this->config->setUserValue(
-				$userId,
-				$this->appName,
-				self::SERVER_TYPE_KEY,
-				$serverType,
-			);
-			$this->config->setUserValue(
-				$userId,
-				$this->appName,
-				self::CUSTOM_URL_KEY,
-				$customUrl,
-			);
-		}
-
 		$loginEmail = trim($loginEmail);
 
+		/*
+		 * Validate every submitted value before changing either the
+		 * provider or the login identity. This avoids partial saves.
+		 */
 		if (
 			$loginEmail !== ''
 			&& filter_var(
@@ -529,13 +582,38 @@ final class UserSettingsService {
 			);
 		}
 
+		if ($adminSettings['allow_user_override']) {
+			$customUrl = $this->normalizeCustomUrl(
+				$customUrl,
+			);
+
+			$this->validateProviderSettings(
+				$serverType,
+				$customUrl,
+			);
+		}
+
+		if ($adminSettings['allow_user_override']) {
+			$this->config->setUserValue(
+				$userId,
+				$this->appName,
+				self::SERVER_TYPE_KEY,
+				$serverType,
+			);
+			$this->config->setUserValue(
+				$userId,
+				$this->appName,
+				self::CUSTOM_URL_KEY,
+				$customUrl,
+			);
+		}
+
 		$this->config->setUserValue(
 			$userId,
 			$this->appName,
 			self::USE_NEXTCLOUD_EMAIL_KEY,
 			$useNextcloudEmail ? '1' : '0',
 		);
-
 		$this->config->setUserValue(
 			$userId,
 			$this->appName,
@@ -543,7 +621,6 @@ final class UserSettingsService {
 			$loginEmail,
 		);
 	}
-
 
 	public function getUserPreferences(string $userId): array {
 		$raw = $this->config->getUserValue(
@@ -640,16 +717,11 @@ final class UserSettingsService {
 			],
 			$defaults['start_category'],
 		);
-
 		$interfaceMode = $this->allowedString(
 			$value['interface_mode'],
-			[
-				'standard',
-				'advanced',
-			],
+			['standard', 'advanced'],
 			$defaults['interface_mode'],
 		);
-
 		$navigationStartMode = $this->allowedString(
 			$value['navigation_start_mode'],
 			[
@@ -661,17 +733,11 @@ final class UserSettingsService {
 			],
 			$defaults['navigation_start_mode'],
 		);
-
 		$defaultTargetMode = $this->allowedString(
 			$value['default_target_mode'],
-			[
-				'personal',
-				'last_used',
-				'fixed',
-			],
+			['personal', 'last_used', 'fixed'],
 			$defaults['default_target_mode'],
 		);
-
 		$defaultItemType = $this->allowedString(
 			$value['default_item_type'],
 			[
@@ -684,25 +750,21 @@ final class UserSettingsService {
 			],
 			$defaults['default_item_type'],
 		);
-
 		$generatorMode = $this->allowedString(
 			$value['generator_mode'],
 			['password', 'passphrase'],
 			$defaults['generator_mode'],
 		);
-
 		$passphraseLanguage = $this->allowedString(
 			$value['passphrase_language'],
 			['de', 'en'],
 			$defaults['passphrase_language'],
 		);
-
 		$passphraseSeparator = $this->allowedString(
 			$value['passphrase_separator'],
 			['hyphen', 'space', 'dot', 'underscore'],
 			$defaults['passphrase_separator'],
 		);
-
 		$passphraseCapitalization = $this->allowedString(
 			$value['passphrase_capitalization'],
 			['lower', 'first', 'all'],
@@ -762,7 +824,8 @@ final class UserSettingsService {
 				min(8, (int)$value['passphrase_word_count']),
 			),
 			'passphrase_separator' => $passphraseSeparator,
-			'passphrase_capitalization' => $passphraseCapitalization,
+			'passphrase_capitalization' =>
+				$passphraseCapitalization,
 			'passphrase_include_number' => $this->boolValue(
 				$value['passphrase_include_number'],
 				$defaults['passphrase_include_number'],
@@ -787,7 +850,11 @@ final class UserSettingsService {
 	}
 
 	private function shortString(mixed $value): string {
-		return substr(trim((string)$value), 0, 200);
+		return mb_substr(
+			trim((string)$value),
+			0,
+			200,
+		);
 	}
 
 	private function boolValue(
@@ -808,8 +875,12 @@ final class UserSettingsService {
 	}
 
 	public function getApiUrls(string $userId): array {
-		$settings = $this->resolveProviderSettings($userId);
-		$this->assertResolvedProviderAccessAllowed($settings);
+		$settings = $this->resolveProviderSettings(
+			$userId,
+		);
+		$this->assertResolvedProviderAccessAllowed(
+			$settings,
+		);
 
 		$type = $settings['server_type'];
 		$customUrl = $settings['custom_url'];
@@ -860,13 +931,8 @@ final class UserSettingsService {
 			);
 		}
 
-		$host = strtolower(
-			rtrim($host, '.'),
-		);
-
-		$addresses = $this->resolveHostAddresses(
-			$host,
-		);
+		$host = strtolower(rtrim($host, '.'));
+		$addresses = $this->resolveHostAddresses($host);
 
 		if ($addresses === []) {
 			throw new \RuntimeException(
@@ -880,7 +946,7 @@ final class UserSettingsService {
 					$address,
 					FILTER_VALIDATE_IP,
 					FILTER_FLAG_NO_PRIV_RANGE
-						| FILTER_FLAG_NO_RES_RANGE,
+					| FILTER_FLAG_NO_RES_RANGE,
 				) === false
 			) {
 				throw new \RuntimeException(
@@ -894,7 +960,6 @@ final class UserSettingsService {
 		string $host,
 	): array {
 		$addresses = [];
-
 		$records = @dns_get_record(
 			$host,
 			DNS_A | DNS_AAAA,
@@ -902,7 +967,8 @@ final class UserSettingsService {
 
 		if (is_array($records)) {
 			foreach ($records as $record) {
-				$address = $record['ip']
+				$address =
+					$record['ip']
 					?? $record['ipv6']
 					?? null;
 
@@ -913,21 +979,19 @@ final class UserSettingsService {
 		}
 
 		if ($addresses === []) {
-			$ipv4Addresses = @gethostbynamel(
-				$host,
-			);
+			$ipv4Addresses = @gethostbynamel($host);
 
 			if (is_array($ipv4Addresses)) {
 				$addresses = $ipv4Addresses;
 			}
 		}
 
-		return array_values(
-			array_unique($addresses),
-		);
+		return array_values(array_unique($addresses));
 	}
 
-	private function resolveProviderSettings(string $userId): array {
+	private function resolveProviderSettings(
+		string $userId,
+	): array {
 		$adminSettings = $this->getAdminSettings();
 		$canEdit = $adminSettings['allow_user_override'];
 
@@ -947,7 +1011,11 @@ final class UserSettingsService {
 			'',
 		);
 
-		if (!in_array($userServerType, self::SERVER_TYPES, true)) {
+		if (!in_array(
+			$userServerType,
+			self::SERVER_TYPES,
+			true,
+		)) {
 			return [
 				'server_type' => $adminSettings['server_type'],
 				'custom_url' => $adminSettings['custom_url'],
@@ -969,7 +1037,9 @@ final class UserSettingsService {
 		];
 	}
 
-	private function normalizeCustomUrl(string $customUrl): string {
+	private function normalizeCustomUrl(
+		string $customUrl,
+	): string {
 		return rtrim(trim($customUrl), '/');
 	}
 
@@ -977,17 +1047,19 @@ final class UserSettingsService {
 		string $serverType,
 		string $customUrl,
 	): void {
-		if (!in_array($serverType, self::SERVER_TYPES, true)) {
+		if (!in_array(
+			$serverType,
+			self::SERVER_TYPES,
+			true,
+		)) {
 			throw new \InvalidArgumentException(
 				$this->l->t('Invalid server type'),
 			);
 		}
 
-		if ($serverType !== 'selfhosted') {
-			return;
+		if ($serverType === 'selfhosted') {
+			$this->validateSelfhostedUrl($customUrl);
 		}
-
-		$this->validateSelfhostedUrl($customUrl);
 	}
 
 	private function validateSelfhostedUrl(string $url): void {
@@ -1063,7 +1135,9 @@ final class UserSettingsService {
 		}
 	}
 
-	private function getOrCreateDeviceId(string $userId): string {
+	private function getOrCreateDeviceId(
+		string $userId,
+	): string {
 		$id = $this->config->getUserValue(
 			$userId,
 			$this->appName,
@@ -1087,8 +1161,12 @@ final class UserSettingsService {
 
 	private function generateUuidV4(): string {
 		$bytes = random_bytes(16);
-		$bytes[6] = chr(ord($bytes[6]) & 0x0f | 0x40);
-		$bytes[8] = chr(ord($bytes[8]) & 0x3f | 0x80);
+		$bytes[6] = chr(
+			ord($bytes[6]) & 0x0f | 0x40,
+		);
+		$bytes[8] = chr(
+			ord($bytes[8]) & 0x3f | 0x80,
+		);
 		$hex = bin2hex($bytes);
 
 		return sprintf(

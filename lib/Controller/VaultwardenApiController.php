@@ -15,6 +15,8 @@ use OCP\IRequest;
 use Psr\Log\LoggerInterface;
 
 final class VaultwardenApiController extends Controller {
+	private const MAX_ATTACHMENT_MB = 50;
+
 	public function __construct(
 		string $appName,
 		IRequest $request,
@@ -290,7 +292,7 @@ final class VaultwardenApiController extends Controller {
 
 			$attachmentMaxMb = max(
 				1,
-				min(1024, $attachmentMaxMb),
+				min(self::MAX_ATTACHMENT_MB, $attachmentMaxMb),
 			);
 
 			$attachmentUploadSize =
