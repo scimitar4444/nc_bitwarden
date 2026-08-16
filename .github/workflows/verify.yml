@@ -39,3 +39,18 @@ jobs:
 
       - name: Run tests, lint, preflight, and production build
         run: npm run verify
+
+  cleanup-temporary-branches:
+    if: github.event_name == 'push' && github.event.head_commit.message == 'Clean up temporary implementation branches'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      - name: Delete implementation backup branches
+        run: |
+          git push origin --delete agent/stability-and-ui-improvements-backup || true
+          git push origin --delete agent/stability-and-ui-improvements-cleanup-backup || true
