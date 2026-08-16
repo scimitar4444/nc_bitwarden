@@ -1807,6 +1807,48 @@ const activeFilterLabel = computed(() => {
   )?.label || t('nc_bitwarden', 'All items')
 })
 
+const activeCreateContext = computed(() => {
+  if (selectedCollection.value !== null) {
+    const collection = allCollectionRows.value.find(row =>
+      normalizeId(row.id) === selectedCollection.value,
+    )
+
+    if (collection && !collection.readOnly) {
+      return {
+        kind: 'collection',
+        folderId: '',
+        organizationId: String(
+          collection.organizationId ?? '',
+        ),
+        collectionId: String(collection.id ?? ''),
+      }
+    }
+  }
+
+  if (selectedFolder.value !== null) {
+    const folder = selectedFolder.value === '__none__'
+      ? null
+      : (props.folders ?? []).find(candidate =>
+        normalizeId(candidate.id)
+          === selectedFolder.value,
+      )
+
+    return {
+      kind: 'folder',
+      folderId: String(folder?.id ?? ''),
+      organizationId: '',
+      collectionId: '',
+    }
+  }
+
+  return {
+    kind: 'category',
+    folderId: '',
+    organizationId: '',
+    collectionId: '',
+  }
+})
+
 function closeCategoryMenuOnOutsidePointer(event) {
   if (
     categoryMenu.value?.open
@@ -2094,11 +2136,16 @@ watch(
 )
 
 watch(
-  [filtered, activeFilterLabel],
-  ([filteredItems, label]) => {
+  [
+    filtered,
+    activeFilterLabel,
+    activeCreateContext,
+  ],
+  ([filteredItems, label, createContext]) => {
     emit('filter-change', {
       items: [...filteredItems],
       label,
+      createContext: { ...createContext },
 
       trash:
         selectedCategory.value === 'trash',

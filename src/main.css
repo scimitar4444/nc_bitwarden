@@ -11,3 +11,50 @@
     bottom: 0;
     overflow: hidden;
 }
+
+.bw-column-resizer {
+    position: relative;
+    z-index: 5;
+    width: 7px;
+    min-width: 7px;
+    flex: 0 0 7px;
+    outline: none;
+    background: transparent;
+    cursor: col-resize;
+    touch-action: none;
+    user-select: none;
+}
+
+.bw-column-resizer::before {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 3px;
+    width: 1px;
+    background: var(--color-border);
+    content: '';
+    transition:
+        width 0.12s ease,
+        left 0.12s ease,
+        background 0.12s ease;
+}
+
+.bw-column-resizer:hover::before,
+.bw-column-resizer:focus-visible::before,
+.bw-column-resizer--active::before {
+    left: 2px;
+    width: 3px;
+    background: var(--color-primary-element);
+}
+
+.bw-column-resizing,
+.bw-column-resizing * {
+    cursor: col-resize !important;
+    user-select: none !important;
+}
+
+@media (hover: none), (pointer: coarse) {
+    .bw-column-resizer {
+        display: none;
+    }
+}

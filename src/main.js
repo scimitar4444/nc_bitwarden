@@ -1,6 +1,9 @@
 import { createApp } from 'vue'
 import './main.css'
 import App from './App.vue'
+import {
+  installColumnResizers,
+} from './services/columnResizer.js'
 
 const el = document.querySelector('#nc-bitwarden-app')
 if (!el) {
@@ -11,5 +14,13 @@ if (!el) {
     console.error('[nc_bitwarden] Vue-Fehler:', info, err)
   }
   app.mount(el)
-  console.info('[nc_bitwarden] App gemountet.')
+
+  const removeColumnResizers =
+    installColumnResizers(el)
+
+  window.addEventListener(
+    'pagehide',
+    removeColumnResizers,
+    { once: true },
+  )
 }
