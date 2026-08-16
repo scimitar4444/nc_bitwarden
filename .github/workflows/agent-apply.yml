@@ -1,0 +1,89 @@
+name: Agent apply changes
+
+on:
+  push:
+    branches:
+      - agent/stability-resizable-columns-context-defaults
+    paths:
+      - .agent/apply_changes.py
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out branch
+        uses: actions/checkout@v4
+        with:
+          ref: agent/stability-resizable-columns-context-defaults
+          fetch-depth: 0
+
+      - name: Detect change script
+        id: changes
+        shell: bash
+        run: |
+          if [[ -f .agent/apply_changes.py ]]; then
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "present=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Set up Node.js
+        if: steps.changes.outputs.present == 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Set up PHP
+        if: steps.changes.outputs.present == 'true'
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          tools: composer:v2
+          coverage: none
+
+      - name: Apply requested changes
+        if: steps.changes.outputs.present == 'true'
+        run: python3 .agent/apply_changes.py
+
+      - name: Install frontend dependencies
+        if: steps.changes.outputs.present == 'true'
+        run: npm ci
+
+      - name: Rebuild localization
+        if: steps.changes.outputs.present == 'true'
+        run: npm run l10n:build
+
+      - name: Verify frontend and release preflight
+        if: steps.changes.outputs.present == 'true'
+        run: npm run verify
+
+      - name: Install PHP development tools
+        if: steps.changes.outputs.present == 'true'
+        run: composer install --no-interaction --prefer-dist
+
+      - name: Verify PHP
+        if: steps.changes.outputs.present == 'true'
+        run: |
+          composer lint
+          composer cs:check
+          composer psalm
+
+      - name: Commit validated changes
+        if: steps.changes.outputs.present == 'true'
+        shell: bash
+        run: |
+          rm -f .agent/apply_changes.py
+          rmdir .agent 2>/dev/null || true
+          git config user.name "openai-agent"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          if git diff --cached --quiet; then
+            echo "No changes to commit."
+            exit 0
+          fi
+          git commit -m "Improve stability and vault interface"
+          git push origin HEAD:agent/stability-resizable-columns-context-defaults
