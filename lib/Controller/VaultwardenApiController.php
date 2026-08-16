@@ -114,9 +114,10 @@ final class VaultwardenApiController extends Controller {
 				],
 			);
 
-			$status = (int)$e->getCode() === 403
+			$errorCode = (int)$e->getCode();
+			$status = $errorCode === 403
 				? 403
-				: 401;
+				: ($errorCode >= 500 ? 502 : 401);
 
 			$response = new JSONResponse(
 				['error' => $e->getMessage()],
@@ -178,6 +179,14 @@ final class VaultwardenApiController extends Controller {
 	#[NoAdminRequired]
 	public function getCiphers(): JSONResponse {
 		return $this->proxy('GET', '/ciphers');
+	}
+
+	#[NoAdminRequired]
+	public function getCipher(string $id): JSONResponse {
+		return $this->proxy(
+			'GET',
+			'/ciphers/' . rawurlencode($id),
+		);
 	}
 
 	#[NoAdminRequired]
@@ -289,7 +298,7 @@ final class VaultwardenApiController extends Controller {
 
 			$attachmentMaxMb = max(
 				1,
-				min(1024, $attachmentMaxMb),
+				min(50, $attachmentMaxMb),
 			);
 
 			$attachmentUploadSize

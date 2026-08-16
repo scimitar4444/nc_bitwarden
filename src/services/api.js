@@ -130,6 +130,11 @@ export const VaultwardenApi = {
 
   async sync() { return (await axios.get(base('/api/sync'))).data },
   async getCiphers() { return (await axios.get(base('/api/ciphers'))).data },
+  async getCipher(id) {
+    return (
+      await axios.get(base(`/api/ciphers/${id}`))
+    ).data
+  },
   async createCipher(data) {
     return (
       await axios.post(base('/api/ciphers'), data)

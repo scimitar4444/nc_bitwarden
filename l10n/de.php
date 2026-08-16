@@ -648,5 +648,6 @@ $TRANSLATIONS = array (
   'The provider returned an unsupported key derivation configuration.' => 'Der Anbieter hat eine nicht unterstützte Konfiguration für die Schlüsselableitung zurückgegeben.',
   'This item could not be decrypted completely and cannot be saved.' => 'Dieser Eintrag konnte nicht vollständig entschlüsselt werden und kann nicht gespeichert werden.',
   'This item could not be decrypted completely and is therefore read-only.' => 'Dieser Eintrag konnte nicht vollständig entschlüsselt werden und ist daher schreibgeschützt.',
+  'The source deletion could not be verified. The new item was preserved to prevent data loss. Reload the vault before making further changes.' => 'Das Löschen des ursprünglichen Eintrags konnte nicht überprüft werden. Der neue Eintrag wurde zum Schutz vor Datenverlust beibehalten. Laden Sie den Tresor neu, bevor Sie weitere Änderungen vornehmen.',
 );
 $PLURAL_FORMS = 'nplurals=2; plural=(n != 1);';

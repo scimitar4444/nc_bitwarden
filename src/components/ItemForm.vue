@@ -2416,6 +2416,27 @@ function isCipherRevisionConflict(exception) {
   )
 }
 
+function responseStatus(exception) {
+  return Number(
+    exception?.response?.status
+    ?? exception?.response?.data?.status
+    ?? 0,
+  ) || 0
+}
+
+async function sourceCipherExists(cipherId) {
+  try {
+    await VaultwardenApi.getCipher(cipherId)
+    return true
+  } catch (exception) {
+    if (responseStatus(exception) === 404) {
+      return false
+    }
+
+    throw exception
+  }
+}
+
 function itemSaveErrorMessage(exception) {
   if (isCipherRevisionConflict(exception)) {
     return t(
@@ -2572,25 +2593,45 @@ async function save() {
             getEncryptionKey(),
           )
 
-          await VaultwardenApi.deleteCipher(
-            props.item.id,
-          )
-        } catch (transferException) {
-          /*
-           * Rollback: Der alte Eintrag ist zu diesem Zeitpunkt
-           * noch vollständig vorhanden. Der unvollständige
-           * Ziel-Eintrag wird einschließlich seiner Anhänge
-           * wieder entfernt.
-           */
           try {
             await VaultwardenApi.deleteCipher(
-              createdId,
+              props.item.id,
             )
-          } catch (rollbackException) {
-            console.error(
-              '[nc_bitwarden] Owner-change rollback failed:',
-              rollbackException,
-            )
+          } catch (deleteException) {
+            let sourceStillExists
+
+            try {
+              sourceStillExists = await sourceCipherExists(
+                props.item.id,
+              )
+            } catch (verificationException) {
+              const ambiguousError = new Error(
+                t(
+                  'nc_bitwarden',
+                  'The source deletion could not be verified. The new item was preserved to prevent data loss. Reload the vault before making further changes.',
+                ),
+                { cause: verificationException },
+              )
+              ambiguousError.preserveTarget = true
+              throw ambiguousError
+            }
+
+            if (sourceStillExists) {
+              throw deleteException
+            }
+          }
+        } catch (transferException) {
+          if (!transferException?.preserveTarget) {
+            try {
+              await VaultwardenApi.deleteCipher(
+                createdId,
+              )
+            } catch (rollbackException) {
+              console.error(
+                '[nc_bitwarden] Owner-change rollback failed:',
+                rollbackException,
+              )
+            }
           }
 
           throw transferException

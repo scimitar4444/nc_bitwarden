@@ -16,7 +16,7 @@ final class AttachmentSettingsController extends Controller {
 	private const CONFIG_KEY = 'attachment_max_mb';
 	private const DEFAULT_MAX_MB = 25;
 	private const MIN_MAX_MB = 1;
-	private const MAX_MAX_MB = 1024;
+	private const MAX_MAX_MB = 50;
 
 	public function __construct(
 		string $appName,

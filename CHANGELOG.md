@@ -10,6 +10,13 @@ All notable changes to Warden are documented in this file.
 - Column widths are stored per Nextcloud user
 - Creating an item while a folder or collection is active preselects that target
 - Frontend crypto regression tests and continuous integration groundwork
+- Added regression tests for strict encrypted-string validation and user-key length checks
+- Limited attachment transfers to a memory-safe configurable maximum and reject oversized downloads
+- Reject invalid provider JSON instead of silently treating it as an empty response
+- Replace authentication tokens as one coherent session set to avoid stale refresh tokens
+- Validate complete settings requests before persisting any part of them
+- Preserve the newly-created cipher when source deletion cannot be verified during ownership transfer
+- Added continuous integration for frontend, PHP 8.1–8.4 syntax, coding style and Psalm
 
 ### Security and stability
 

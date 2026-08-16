@@ -322,14 +322,13 @@ final class UserSettingsService {
 		];
 	}
 
-	public function saveOrganizationNoticeSettings(
-		bool $enabled,
+	public function validateOrganizationNoticeSettings(
 		string $title,
 		string $message,
 		string $supportUrl,
 		string $supportLabel,
 		string $supportEmail,
-	): void {
+	): array {
 		$title = trim($title);
 		$message = trim($message);
 		$supportUrl = trim($supportUrl);
@@ -364,13 +363,38 @@ final class UserSettingsService {
 			);
 		}
 
+		return [
+			'title' => $title,
+			'message' => $message,
+			'support_url' => $supportUrl,
+			'support_label' => $supportLabel,
+			'support_email' => $supportEmail,
+		];
+	}
+
+	public function saveOrganizationNoticeSettings(
+		bool $enabled,
+		string $title,
+		string $message,
+		string $supportUrl,
+		string $supportLabel,
+		string $supportEmail,
+	): void {
+		$notice = $this->validateOrganizationNoticeSettings(
+			$title,
+			$message,
+			$supportUrl,
+			$supportLabel,
+			$supportEmail,
+		);
+
 		$values = [
 			self::ORGANIZATION_NOTICE_ENABLED_KEY => $enabled ? '1' : '0',
-			self::ORGANIZATION_NOTICE_TITLE_KEY => $title,
-			self::ORGANIZATION_NOTICE_MESSAGE_KEY => $message,
-			self::ORGANIZATION_NOTICE_SUPPORT_URL_KEY => $supportUrl,
-			self::ORGANIZATION_NOTICE_SUPPORT_LABEL_KEY => $supportLabel,
-			self::ORGANIZATION_NOTICE_SUPPORT_EMAIL_KEY => $supportEmail,
+			self::ORGANIZATION_NOTICE_TITLE_KEY => $notice['title'],
+			self::ORGANIZATION_NOTICE_MESSAGE_KEY => $notice['message'],
+			self::ORGANIZATION_NOTICE_SUPPORT_URL_KEY => $notice['support_url'],
+			self::ORGANIZATION_NOTICE_SUPPORT_LABEL_KEY => $notice['support_label'],
+			self::ORGANIZATION_NOTICE_SUPPORT_EMAIL_KEY => $notice['support_email'],
 		];
 
 		foreach ($values as $key => $value) {
@@ -474,32 +498,12 @@ final class UserSettingsService {
 		string $loginEmail,
 	): void {
 		$adminSettings = $this->getAdminSettings();
+		$providerCanBeChanged = $adminSettings['allow_user_override'];
 
-		/*
-		 * Die persönliche Serverauswahl darf nur verändert werden,
-		 * wenn der Administrator dies erlaubt.
-		 *
-		 * Die persönliche Anmelde-E-Mail bleibt davon unabhängig
-		 * immer bearbeitbar.
-		 */
-		if ($adminSettings['allow_user_override']) {
+		if ($providerCanBeChanged) {
 			$customUrl = $this->normalizeCustomUrl($customUrl);
-
 			$this->validateProviderSettings(
 				$serverType,
-				$customUrl,
-			);
-
-			$this->config->setUserValue(
-				$userId,
-				$this->appName,
-				self::SERVER_TYPE_KEY,
-				$serverType,
-			);
-			$this->config->setUserValue(
-				$userId,
-				$this->appName,
-				self::CUSTOM_URL_KEY,
 				$customUrl,
 			);
 		}
@@ -525,6 +529,21 @@ final class UserSettingsService {
 				$this->l->t(
 					'Enter a valid email address',
 				),
+			);
+		}
+
+		if ($providerCanBeChanged) {
+			$this->config->setUserValue(
+				$userId,
+				$this->appName,
+				self::SERVER_TYPE_KEY,
+				$serverType,
+			);
+			$this->config->setUserValue(
+				$userId,
+				$this->appName,
+				self::CUSTOM_URL_KEY,
+				$customUrl,
 			);
 		}
 

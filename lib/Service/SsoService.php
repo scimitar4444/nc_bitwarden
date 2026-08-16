@@ -361,20 +361,16 @@ final class SsoService {
 			);
 		}
 
-		$data = json_decode(
+		$data = $this->decodeJsonResponse(
 			$this->responseBodyToString($response->getBody()),
-			true,
+			'SSO token exchange',
 		);
 
-		if (!is_array($data) || empty($data['access_token'])) {
+		if (empty($data['access_token'])) {
 			throw new \RuntimeException(
-				is_array($data)
-					? (
-						$data['error_description']
-						?? $data['error']
-						?? 'SSO-Anmeldung fehlgeschlagen.'
-					)
-					: 'Ungültige Antwort von Vaultwarden.',
+				$data['error_description']
+					?? $data['error']
+					?? 'SSO-Anmeldung fehlgeschlagen.',
 			);
 		}
 
@@ -594,14 +590,14 @@ final class SsoService {
 			);
 		}
 
-		$profile = json_decode(
+		$profile = $this->decodeJsonResponse(
 			$this->responseBodyToString($response->getBody()),
-			true,
+			'Account profile',
 		);
 
-		$email = is_array($profile)
-			? trim((string)($profile['email'] ?? $profile['Email'] ?? ''))
-			: '';
+		$email = trim(
+			(string)($profile['email'] ?? $profile['Email'] ?? ''),
+		);
 
 		if ($email === '') {
 			throw new \RuntimeException(
@@ -616,6 +612,13 @@ final class SsoService {
 		string $userId,
 		array $data,
 	): void {
+		$providerFingerprint = $this->providerFingerprint($userId);
+
+		$this->session->remove(self::SESSION_TOKEN_KEY);
+		$this->session->remove(self::SESSION_REFRESH_KEY);
+		$this->session->remove(self::SESSION_EXPIRY_KEY);
+		$this->session->remove(self::SESSION_PROVIDER_KEY);
+
 		$this->session->set(
 			self::SESSION_TOKEN_KEY,
 			(string)$data['access_token'],
@@ -635,7 +638,7 @@ final class SsoService {
 
 		$this->session->set(
 			self::SESSION_PROVIDER_KEY,
-			$this->providerFingerprint($userId),
+			$providerFingerprint,
 		);
 	}
 
@@ -681,6 +684,42 @@ final class SsoService {
 			strtr(base64_encode($value), '+/', '-_'),
 			'=',
 		);
+	}
+
+	private function decodeJsonResponse(
+		string $body,
+		string $context,
+	): array {
+		if (trim($body) === '') {
+			throw new \RuntimeException(
+				$context . ' returned an empty response.',
+				502,
+			);
+		}
+
+		try {
+			$data = json_decode(
+				$body,
+				true,
+				512,
+				JSON_THROW_ON_ERROR,
+			);
+		} catch (\JsonException $exception) {
+			throw new \RuntimeException(
+				$context . ' returned invalid JSON.',
+				502,
+				$exception,
+			);
+		}
+
+		if (!is_array($data)) {
+			throw new \RuntimeException(
+				$context . ' returned an unexpected JSON value.',
+				502,
+			);
+		}
+
+		return $data;
 	}
 
 	/**

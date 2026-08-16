@@ -5,6 +5,7 @@ import axios from '@nextcloud/axios'
 import { generateUrl } from '@nextcloud/router'
 
 export const DEFAULT_ATTACHMENT_MAX_MB = 25
+export const MAX_ATTACHMENT_MAX_MB = 50
 
 const endpoint = () =>
   generateUrl(
@@ -18,7 +19,7 @@ function normalizeSettings(value = {}) {
   const maxMb = Math.max(
     1,
     Math.min(
-      1024,
+      MAX_ATTACHMENT_MAX_MB,
       Number(value.maxMb)
         || DEFAULT_ATTACHMENT_MAX_MB,
     ),
@@ -62,7 +63,10 @@ export async function loadAttachmentLimit(
 export async function saveAttachmentLimit(maxMb) {
   const normalized = Math.max(
     1,
-    Math.min(1024, Number(maxMb) || 25),
+    Math.min(
+      MAX_ATTACHMENT_MAX_MB,
+      Number(maxMb) || DEFAULT_ATTACHMENT_MAX_MB,
+    ),
   )
 
   const response = await axios.post(

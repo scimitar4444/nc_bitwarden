@@ -140,6 +140,14 @@ final class AdminSettingsController extends Controller {
 				'',
 			);
 
+			$this->settingsService->validateOrganizationNoticeSettings(
+				$organizationNoticeTitle,
+				$organizationNoticeMessage,
+				$organizationNoticeSupportUrl,
+				$organizationNoticeSupportLabel,
+				$organizationNoticeSupportEmail,
+			);
+
 			$this->settingsService->saveAdminSettings(
 				(string)$this->request->getParam(
 					'server_type',

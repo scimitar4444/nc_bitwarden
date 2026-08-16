@@ -2,7 +2,9 @@
 
 namespace OCA\NcBitwarden\Service;
 
+use OCA\NcBitwarden\AppInfo\AppConstants;
 use OCP\Http\Client\IClientService;
+use OCP\IConfig;
 use OCP\ISession;
 
 final class VaultwardenProxyService {
@@ -10,6 +12,8 @@ final class VaultwardenProxyService {
 	private const SESSION_REFRESH_KEY = 'bw_refresh_token';
 	private const SESSION_EXPIRY_KEY = 'bw_token_expiry';
 	private const SESSION_PROVIDER_KEY = 'bw_provider_fingerprint';
+	private const DEFAULT_ATTACHMENT_MAX_MB = 25;
+	private const MAX_ATTACHMENT_MAX_MB = 50;
 
 	private array $baseOptions = [
 		'allow_redirects' => false,
@@ -32,6 +36,7 @@ final class VaultwardenProxyService {
 		private IClientService $httpClientService,
 		private ISession $session,
 		private UserSettingsService $settingsService,
+		private IConfig $config,
 	) {
 	}
 
@@ -54,10 +59,10 @@ final class VaultwardenProxyService {
 					]),
 				])
 			);
-			$data = json_decode($this->responseBodyToString($response->getBody()), true);
-			if (!is_array($data)) {
-				throw new \RuntimeException('Ungueltiger Server-Response (kein JSON)');
-			}
+			$data = $this->decodeJsonResponse(
+				$this->responseBodyToString($response->getBody()),
+				'Prelogin',
+			);
 			return $data;
 		} catch (\Exception $e) {
 			throw new \RuntimeException($this->extractErrorMessage($e), 0, $e);
@@ -127,12 +132,18 @@ final class VaultwardenProxyService {
 
 			throw new \RuntimeException($this->extractErrorMessage($e), 0, $e);
 		}
-		$data = json_decode($this->responseBodyToString($response->getBody()), true);
+		$data = $this->decodeJsonResponse(
+			$this->responseBodyToString($response->getBody()),
+			'Login',
+		);
 		if (empty($data['access_token'])) {
 			throw new \RuntimeException(
 				$data['error_description'] ?? $data['error'] ?? 'Login fehlgeschlagen'
 			);
 		}
+		$providerFingerprint = $this->providerFingerprintFromUrls($urls);
+		$this->logout();
+
 		$this->session->set(
 			self::SESSION_TOKEN_KEY,
 			(string)$data['access_token'],
@@ -151,7 +162,7 @@ final class VaultwardenProxyService {
 
 		$this->session->set(
 			self::SESSION_PROVIDER_KEY,
-			$this->providerFingerprintFromUrls($urls),
+			$providerFingerprint,
 		);
 
 		/*
@@ -200,17 +211,14 @@ final class VaultwardenProxyService {
 				$e,
 			);
 		}
-		$data = json_decode(
+		$data = $this->decodeJsonResponse(
 			$this->responseBodyToString(
 				$response->getBody(),
 			),
-			true,
+			'Token refresh',
 		);
 
-		if (
-			!is_array($data)
-			|| empty($data['access_token'])
-		) {
+		if (empty($data['access_token'])) {
 			$this->logout();
 
 			throw new \RuntimeException(
@@ -301,7 +309,10 @@ final class VaultwardenProxyService {
 		);
 
 		return $responseBody !== ''
-			? (json_decode($responseBody, true) ?? [])
+			? $this->decodeJsonResponse(
+				$responseBody,
+				'Vault API',
+			)
 			: [];
 	}
 
@@ -370,7 +381,10 @@ final class VaultwardenProxyService {
 		);
 
 		return $responseBody !== ''
-			? (json_decode($responseBody, true) ?? [])
+			? $this->decodeJsonResponse(
+				$responseBody,
+				'Attachment upload',
+			)
 			: [];
 	}
 
@@ -422,9 +436,9 @@ final class VaultwardenProxyService {
 			$metadataResponse->getBody(),
 		);
 
-		$metadata = json_decode(
+		$metadata = $this->decodeJsonResponse(
 			$metadataBody,
-			true,
+			'Attachment metadata',
 		);
 
 		$downloadUrl = is_array($metadata)
@@ -507,6 +521,7 @@ final class VaultwardenProxyService {
 				'timeout' => 300,
 				'connect_timeout' => 20,
 				'allow_redirects' => false,
+				'stream' => true,
 			],
 		);
 
@@ -528,8 +543,9 @@ final class VaultwardenProxyService {
 			);
 		}
 
-		return $this->responseBodyToString(
+		return $this->responseBodyToLimitedString(
 			$fileResponse->getBody(),
+			$this->attachmentDownloadLimitBytes(),
 		);
 	}
 
@@ -834,6 +850,97 @@ final class VaultwardenProxyService {
 		}
 	}
 
+	private function attachmentDownloadLimitBytes(): int {
+		$configured = (int)$this->config->getAppValue(
+			AppConstants::APP_ID,
+			'attachment_max_mb',
+			(string)self::DEFAULT_ATTACHMENT_MAX_MB,
+		);
+
+		$maxMb = max(
+			1,
+			min(self::MAX_ATTACHMENT_MAX_MB, $configured),
+		);
+
+		return ($maxMb + 1) * 1024 * 1024;
+	}
+
+	private function responseBodyToLimitedString(
+		mixed $body,
+		int $maximumBytes,
+	): string {
+		if (is_resource($body)) {
+			$contents = stream_get_contents(
+				$body,
+				$maximumBytes + 1,
+			);
+
+			if ($contents === false) {
+				throw new \RuntimeException(
+					'The attachment response could not be read.',
+					502,
+				);
+			}
+		} elseif (is_string($body)) {
+			$contents = $body;
+		} elseif (
+			is_object($body)
+			&& method_exists($body, '__toString')
+		) {
+			$contents = (string)$body;
+		} else {
+			throw new \RuntimeException(
+				'The attachment response body is invalid.',
+				502,
+			);
+		}
+
+		if (strlen($contents) > $maximumBytes) {
+			throw new \RuntimeException(
+				'The encrypted attachment exceeds the configured size limit.',
+				413,
+			);
+		}
+
+		return $contents;
+	}
+
+	private function decodeJsonResponse(
+		string $body,
+		string $context,
+	): array {
+		if (trim($body) === '') {
+			throw new \RuntimeException(
+				$context . ' returned an empty response.',
+				502,
+			);
+		}
+
+		try {
+			$data = json_decode(
+				$body,
+				true,
+				512,
+				JSON_THROW_ON_ERROR,
+			);
+		} catch (\JsonException $exception) {
+			throw new \RuntimeException(
+				$context . ' returned invalid JSON.',
+				502,
+				$exception,
+			);
+		}
+
+		if (!is_array($data)) {
+			throw new \RuntimeException(
+				$context . ' returned an unexpected JSON value.',
+				502,
+			);
+		}
+
+		return $data;
+	}
+
 	/**
 	 * Convert a Nextcloud HTTP response body into a string.
 	 *
@@ -846,7 +953,18 @@ final class VaultwardenProxyService {
 			return $contents === false ? '' : $contents;
 		}
 
-		return is_string($body) ? $body : '';
+		if (is_string($body)) {
+			return $body;
+		}
+
+		if (
+			is_object($body)
+			&& method_exists($body, '__toString')
+		) {
+			return (string)$body;
+		}
+
+		return '';
 	}
 
 	private function extractErrorMessage(\Exception $e): string {
