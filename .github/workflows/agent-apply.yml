@@ -106,10 +106,11 @@ jobs:
         if: steps.changes.outputs.present == 'true'
         run: composer install --no-interaction --prefer-dist
 
-      - name: Verify PHP
+      - name: Format and verify PHP
         if: steps.changes.outputs.present == 'true'
         run: |
           composer lint
+          composer cs:fix
           composer cs:check
           composer psalm
 
