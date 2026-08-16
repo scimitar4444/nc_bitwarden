@@ -1,7 +1,0 @@
-SPDX-License-Identifier: MIT
-SPDX-FileCopyrightText: Paul Miller (https://paulmillr.com)
-
-This file is generated from multiple sources. Included packages:
-- @noble/hashes
-	- version: 1.8.0
-	- license: MIT
