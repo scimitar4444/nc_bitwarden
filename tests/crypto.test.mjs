@@ -15,9 +15,11 @@ if (!globalThis.btoa) {
 }
 
 const {
+  decryptCipher,
   decryptEncStringRaw,
   decryptUserSymmetricKey,
   encryptBuffer,
+  generateUserSymmetricKey,
   parseEncString,
   stretchMasterKey,
 } = await import('../src/services/crypto.js')
@@ -96,4 +98,62 @@ test('valid 64-byte user keys still round-trip', async () => {
   combined.set(new Uint8Array(result.macKey), 32)
 
   assert.deepEqual(combined, rawUserKey)
+})
+
+test('organization ciphers never fall back to the personal user key', async () => {
+  const userKey = generateUserSymmetricKey()
+
+  await assert.rejects(
+    decryptCipher(
+      {
+        Id: 'cipher-1',
+        Type: 2,
+        OrganizationId: 'organization-1',
+      },
+      userKey,
+      {},
+    ),
+    /organization key/u,
+  )
+})
+
+test('a single damaged encrypted field makes the cipher read-only', async () => {
+  const userKey = generateUserSymmetricKey()
+  const encryptedName = await encryptBuffer(
+    new TextEncoder().encode('Protected item').buffer,
+    userKey.encKey,
+    userKey.macKey,
+  )
+  const damagedNotes = `2.${toBase64(16)}|${toBase64(16)}`
+
+  const result = await decryptCipher(
+    {
+      Id: 'cipher-2',
+      Type: 2,
+      Name: encryptedName,
+      Notes: damagedNotes,
+      Favorite: false,
+      CollectionIds: [],
+      PasswordHistory: [],
+      Attachments: [],
+      Edit: true,
+      ViewPassword: true,
+      Permissions: {
+        Delete: true,
+        Restore: true,
+      },
+    },
+    userKey,
+  )
+
+  assert.equal(result.name, 'Protected item')
+  assert.equal(result.notes, '')
+  assert.equal(result.decryptionFailed, true)
+  assert.equal(result.edit, false)
+  assert.equal(result.viewPassword, false)
+  assert.deepEqual(result.permissions, {
+    delete: false,
+    restore: false,
+  })
+  assert.equal(result.decryptionErrors.length, 1)
 })
