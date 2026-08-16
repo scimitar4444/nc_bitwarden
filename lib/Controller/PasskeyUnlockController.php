@@ -7,8 +7,8 @@ use OCA\NcBitwarden\Service\UserSettingsService;
 use OCP\AppFramework\Controller;
 use OCP\AppFramework\Http\Attribute\NoAdminRequired;
 use OCP\AppFramework\Http\JSONResponse;
-use OCP\IRequest;
 use OCP\IL10N;
+use OCP\IRequest;
 
 final class PasskeyUnlockController extends Controller {
 	public function __construct(
@@ -78,7 +78,7 @@ final class PasskeyUnlockController extends Controller {
 			);
 		} catch (
 			\InvalidArgumentException
-			| \JsonException $exception
+			|\JsonException $exception
 		) {
 			return new JSONResponse(
 				[

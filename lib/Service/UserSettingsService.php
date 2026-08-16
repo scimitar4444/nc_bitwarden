@@ -309,7 +309,6 @@ final class UserSettingsService {
 		);
 	}
 
-
 	public function getOrganizationNoticeSettings(): array {
 		$settings = $this->getAdminSettings();
 
@@ -543,7 +542,6 @@ final class UserSettingsService {
 			$loginEmail,
 		);
 	}
-
 
 	public function getUserPreferences(string $userId): array {
 		$raw = $this->config->getUserValue(

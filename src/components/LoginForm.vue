@@ -1366,6 +1366,31 @@ function normalizePasswordPolicy(policy) {
   }
 }
 
+function requireKdfInteger(
+  value,
+  fallback,
+  minimum,
+  maximum,
+) {
+  const resolved = value ?? fallback
+  const numeric = Number(resolved)
+
+  if (
+    !Number.isInteger(numeric)
+    || numeric < minimum
+    || numeric > maximum
+  ) {
+    throw new Error(
+      t(
+        'nc_bitwarden',
+        'The provider returned an unsupported key derivation configuration.',
+      ),
+    )
+  }
+
+  return numeric
+}
+
 async function deriveMasterKey(
   password,
   loginEmail,
@@ -1377,47 +1402,59 @@ async function deriveMasterKey(
       ?? 0,
   )
 
-  const kdfIterations = Math.min(
-    Number(
+  if (kdfType === 0) {
+    const iterations = requireKdfInteger(
       kdfData.KdfIterations
-        ?? kdfData.kdfIterations
-        ?? 600000,
-    ),
-    2_000_000,
-  )
+        ?? kdfData.kdfIterations,
+      600000,
+      1,
+      2_000_000,
+    )
 
-  const kdfMemory = Math.min(
-    Number(
-      kdfData.KdfMemory
-        ?? kdfData.kdfMemory
-        ?? 64,
-    ),
-    256,
-  )
-
-  const kdfParallelism = Math.min(
-    Number(
-      kdfData.KdfParallelism
-        ?? kdfData.kdfParallelism
-        ?? 4,
-    ),
-    16,
-  )
-
-  if (kdfType === 1) {
-    return deriveMasterKeyArgon2id(
+    return deriveMasterKeyPBKDF2(
       password,
       loginEmail,
-      kdfMemory,
-      kdfIterations,
-      kdfParallelism,
+      iterations,
     )
   }
 
-  return deriveMasterKeyPBKDF2(
-    password,
-    loginEmail,
-    kdfIterations,
+  if (kdfType === 1) {
+    const iterations = requireKdfInteger(
+      kdfData.KdfIterations
+        ?? kdfData.kdfIterations,
+      3,
+      1,
+      20,
+    )
+    const memory = requireKdfInteger(
+      kdfData.KdfMemory
+        ?? kdfData.kdfMemory,
+      64,
+      8,
+      256,
+    )
+    const parallelism = requireKdfInteger(
+      kdfData.KdfParallelism
+        ?? kdfData.kdfParallelism,
+      4,
+      1,
+      16,
+    )
+
+    return deriveMasterKeyArgon2id(
+      password,
+      loginEmail,
+      memory,
+      iterations,
+      parallelism,
+    )
+  }
+
+  throw new Error(
+    t(
+      'nc_bitwarden',
+      'The provider returned an unsupported key derivation configuration.',
+    ),
   )
 }
 </script>

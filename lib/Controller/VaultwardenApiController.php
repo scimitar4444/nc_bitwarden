@@ -1,6 +1,5 @@
 <?php
 
-
 namespace OCA\NcBitwarden\Controller;
 
 use OCA\NcBitwarden\Service\SsoService;
@@ -54,6 +53,7 @@ final class VaultwardenApiController extends Controller {
 				$status = 502;
 			}
 
+			/** @psalm-suppress InvalidArgument */
 			return new JSONResponse(
 				['error' => $e->getMessage()],
 				$status,
@@ -258,7 +258,6 @@ final class VaultwardenApiController extends Controller {
 		);
 	}
 
-
 	#[NoAdminRequired]
 	public function createAttachment(string $id): JSONResponse {
 		$id = rawurlencode($id);
@@ -293,8 +292,8 @@ final class VaultwardenApiController extends Controller {
 				min(1024, $attachmentMaxMb),
 			);
 
-			$attachmentUploadSize =
-				(int)($uploaded['size'] ?? 0);
+			$attachmentUploadSize
+				= (int)($uploaded['size'] ?? 0);
 
 			if (
 				$attachmentUploadSize <= 0
@@ -305,8 +304,8 @@ final class VaultwardenApiController extends Controller {
 					(string)$uploaded['tmp_name'],
 				);
 
-				$attachmentUploadSize =
-					$detectedSize === false
+				$attachmentUploadSize
+					= $detectedSize === false
 						? 0
 						: (int)$detectedSize;
 			}
@@ -317,8 +316,8 @@ final class VaultwardenApiController extends Controller {
 			 * Spielraum erlaubt. Das Klartextlimit wird im Browser
 			 * exakt geprüft.
 			 */
-			$attachmentUploadLimit =
-				(($attachmentMaxMb + 1) * 1024 * 1024);
+			$attachmentUploadLimit
+				= (($attachmentMaxMb + 1) * 1024 * 1024);
 
 			if (
 				$attachmentUploadSize
@@ -326,15 +325,14 @@ final class VaultwardenApiController extends Controller {
 			) {
 				return new JSONResponse(
 					[
-						'error' =>
-							'Der Anhang ist größer als '
+						'error'
+							=> 'Der Anhang ist größer als '
 							. $attachmentMaxMb
 							. ' MiB.',
 					],
 					413,
 				);
 			}
-
 
 			if (
 				!is_array($uploaded)
@@ -520,7 +518,6 @@ final class VaultwardenApiController extends Controller {
 		);
 	}
 
-
 	private function attachmentErrorResponse(
 		\Exception $exception,
 		string $method,
@@ -549,6 +546,7 @@ final class VaultwardenApiController extends Controller {
 			],
 		);
 
+		/** @psalm-suppress InvalidArgument */
 		return new JSONResponse(
 			['error' => $message],
 			$status,

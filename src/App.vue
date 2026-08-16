@@ -116,7 +116,7 @@
         </NcNoteCard>
       </div>
 
-      <div class="bw-layout">
+      <div class="bw-layout" :style="layoutStyle">
         <!-- Linke Sidebar: Vault-Liste -->
         <aside class="bw-layout__sidebar">
           <VaultList
@@ -147,6 +147,20 @@
             @drop-collection="addItemsToCollection"
           />
         </aside>
+
+        <div
+          class="bw-layout__resizer"
+          role="separator"
+          aria-orientation="vertical"
+          :aria-label="t('nc_bitwarden', 'Resize navigation column')"
+          :aria-valuemin="240"
+          :aria-valuemax="720"
+          :aria-valuenow="layoutWidths.sidebar"
+          tabindex="0"
+          @pointerdown="startColumnResize('sidebar', $event)"
+          @keydown="resizeColumnWithKeyboard('sidebar', $event)"
+          @dblclick="resetColumnWidth('sidebar')"
+        />
 
         <!-- Mittlere Spalte: gefilterte Einträge -->
         <section class="bw-layout__items">
@@ -183,6 +197,20 @@
             "
           />
         </section>
+
+        <div
+          class="bw-layout__resizer"
+          role="separator"
+          aria-orientation="vertical"
+          :aria-label="t('nc_bitwarden', 'Resize item column')"
+          :aria-valuemin="280"
+          :aria-valuemax="760"
+          :aria-valuenow="layoutWidths.items"
+          tabindex="0"
+          @pointerdown="startColumnResize('items', $event)"
+          @keydown="resizeColumnWithKeyboard('items', $event)"
+          @dblclick="resetColumnWidth('items')"
+        />
 
         <!-- Rechte Spalte: Detailansicht oder Formular -->
         <main class="bw-layout__main">
@@ -334,7 +362,7 @@
 </template>
 
 <script setup>
-import { computed, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { t } from '@nextcloud/l10n'
 import NcButton from '@nextcloud/vue/components/NcButton'
 import NcLoadingIcon from '@nextcloud/vue/components/NcLoadingIcon'
@@ -408,6 +436,25 @@ const showWardenSettings = ref(false)
 const bulkActionMode = ref('')
 const bulkActionItems = ref([])
 const selectionRevision = ref(0)
+const activeCreateContext = ref(null)
+
+const DEFAULT_COLUMN_WIDTHS = Object.freeze({
+  sidebar: 400,
+  items: 400,
+})
+
+const layoutWidths = ref({
+  ...DEFAULT_COLUMN_WIDTHS,
+})
+
+let activeColumnResize = null
+
+const layoutStyle = computed(() => ({
+  '--warden-sidebar-width':
+    `${layoutWidths.value.sidebar}px`,
+  '--warden-items-width':
+    `${layoutWidths.value.items}px`,
+}))
 
 /*
  * Persönliche Einträge werden nacheinander mit der bereits
@@ -512,30 +559,41 @@ const organizationNoticeEmailHref = computed(() => (
     : ''
 ))
 
+let organizationNoticeLoadingPromise = null
+
 async function loadOrganizationNoticeSettings() {
   if (organizationNoticeLoaded.value) {
     return
   }
 
-  try {
-    const settings = await VaultwardenApi.getSettings()
-    organizationNotice.value = {
-      ...organizationNotice.value,
-      ...(settings.organization_notice ?? {}),
-    }
-
-    userPreferences.value = normalizeUserPreferences(
-      settings.preferences,
-    )
-
-  } catch (exception) {
-    console.warn(
-      '[nc_bitwarden] Organization notice settings could not be loaded:',
-      exception,
-    )
-  } finally {
-    organizationNoticeLoaded.value = true
+  if (organizationNoticeLoadingPromise) {
+    return organizationNoticeLoadingPromise
   }
+
+  organizationNoticeLoadingPromise = (async () => {
+    try {
+      const settings = await VaultwardenApi.getSettings()
+      organizationNotice.value = {
+        ...organizationNotice.value,
+        ...(settings.organization_notice ?? {}),
+      }
+
+      userPreferences.value = normalizeUserPreferences(
+        settings.preferences,
+      )
+
+      organizationNoticeLoaded.value = true
+    } catch (exception) {
+      console.warn(
+        '[nc_bitwarden] Organization notice settings could not be loaded:',
+        exception,
+      )
+    } finally {
+      organizationNoticeLoadingPromise = null
+    }
+  })()
+
+  return organizationNoticeLoadingPromise
 }
 
 const defaultItemType = computed(() => {
@@ -809,6 +867,92 @@ async function onLoggedIn({
   }
 }
 
+async function settleWithConcurrency(
+  values,
+  mapper,
+  limit = 12,
+) {
+  const entries = Array.isArray(values) ? values : []
+  const results = new Array(entries.length)
+  let nextIndex = 0
+
+  async function worker() {
+    while (nextIndex < entries.length) {
+      const index = nextIndex
+      nextIndex += 1
+
+      try {
+        results[index] = {
+          status: 'fulfilled',
+          value: await mapper(entries[index], index),
+        }
+      } catch (reason) {
+        results[index] = {
+          status: 'rejected',
+          reason,
+        }
+      }
+    }
+  }
+
+  const workerCount = Math.min(
+    Math.max(1, limit),
+    entries.length,
+  )
+
+  await Promise.all(
+    Array.from(
+      { length: workerCount },
+      () => worker(),
+    ),
+  )
+
+  return results
+}
+
+function unavailableCipher(rawCipher, reason) {
+  const raw = rawCipher ?? {}
+
+  return {
+    id: raw.Id ?? raw.id ?? '',
+    type: Number(raw.Type ?? raw.type ?? 0),
+    folderId: raw.FolderId ?? raw.folderId ?? null,
+    collectionIds:
+      raw.CollectionIds ?? raw.collectionIds ?? [],
+    favorite: Boolean(raw.Favorite ?? raw.favorite),
+    name: t(
+      'nc_bitwarden',
+      'Encrypted item unavailable',
+    ),
+    notes: '',
+    revisionDate:
+      raw.RevisionDate ?? raw.revisionDate ?? null,
+    creationDate:
+      raw.CreationDate ?? raw.creationDate ?? null,
+    deletedDate:
+      raw.DeletedDate ?? raw.deletedDate ?? null,
+    organizationId:
+      raw.OrganizationId ?? raw.organizationId ?? null,
+    edit: false,
+    viewPassword: false,
+    permissions: {
+      delete: false,
+      restore: false,
+    },
+    decryptionFailed: true,
+    decryptionErrors: [
+      {
+        field: 'cipher',
+        message:
+          reason?.message
+          ?? String(reason ?? 'Unknown decryption error'),
+      },
+    ],
+    attachments: [],
+    fields: [],
+  }
+}
+
 async function loadVault() {
   loading.value = true
   try {
@@ -899,15 +1043,36 @@ async function loadVault() {
       .filter(result => result.status === 'fulfilled')
       .map(result => decorateCollection(result.value))
 
-    // Ciphers – ein Fehler killt nicht alle anderen
-    const cipherResults = await Promise.allSettled(
-      (sync.Ciphers ?? []).map(c => decryptCipher(c, userKey.value, orgKeys)),
+    // Ciphers are decrypted with bounded parallelism so large vaults
+    // cannot flood the browser with thousands of simultaneous WebCrypto jobs.
+    const rawCiphers = sync.Ciphers ?? []
+    const cipherResults = await settleWithConcurrency(
+      rawCiphers,
+      cipher => decryptCipher(
+        cipher,
+        userKey.value,
+        orgKeys,
+      ),
     )
-    const failed = cipherResults.filter(r => r.status === 'rejected').length
-    if (failed > 0) console.warn(`[nc_bitwarden] ${failed} Einträge konnten nicht entschlüsselt werden`)
-    items.value = cipherResults
-      .filter(result => result.status === 'fulfilled')
-      .map(result => result.value)
+
+    const failed = cipherResults.filter(
+      result => result.status === 'rejected',
+    ).length
+
+    if (failed > 0) {
+      console.warn(
+        `[nc_bitwarden] ${failed} Einträge konnten nicht entschlüsselt werden`,
+      )
+    }
+
+    items.value = cipherResults.map(
+      (result, index) => result.status === 'fulfilled'
+        ? result.value
+        : unavailableCipher(
+          rawCiphers[index],
+          result.reason,
+        ),
+    )
 
     if (restoreSelectedItemPending.value) {
       restoreSelectedItemFromStorage()
@@ -949,6 +1114,7 @@ function resetVaultState() {
   editCollection.value = null
   showPasswordGenerator.value = false
   showWardenSettings.value = false
+  activeCreateContext.value = null
 
   dropTransferQueue.value = []
   dropTransferTarget.value = {
@@ -979,6 +1145,8 @@ async function logout() {
 }
 
 onMounted(async () => {
+  loadColumnWidths()
+
   try {
     await loadOrganizationNoticeSettings()
     const restoredKey = restoreSessionKey()
@@ -1001,6 +1169,203 @@ onMounted(async () => {
   } finally {
     restoringSession.value = false
   }
+})
+
+function clampColumnWidth(column, value) {
+  const limits = column === 'sidebar'
+    ? { min: 240, max: 720 }
+    : { min: 280, max: 760 }
+
+  const fallback = DEFAULT_COLUMN_WIDTHS[column]
+  const numeric = Number(value)
+
+  return Math.min(
+    limits.max,
+    Math.max(
+      limits.min,
+      Number.isFinite(numeric)
+        ? Math.round(numeric)
+        : fallback,
+    ),
+  )
+}
+
+function columnWidthStorageKey() {
+  const userId = currentNextcloudUserId()
+
+  return userId
+    ? `nc_bitwarden.column_widths.v1.${userId}`
+    : null
+}
+
+function loadColumnWidths() {
+  const storageKey = columnWidthStorageKey()
+
+  if (!storageKey || typeof window === 'undefined') {
+    return
+  }
+
+  try {
+    const raw = window.localStorage.getItem(storageKey)
+
+    if (!raw) {
+      return
+    }
+
+    const saved = JSON.parse(raw)
+
+    if (saved?.version !== 1) {
+      return
+    }
+
+    layoutWidths.value = {
+      sidebar: clampColumnWidth(
+        'sidebar',
+        saved.sidebar,
+      ),
+      items: clampColumnWidth(
+        'items',
+        saved.items,
+      ),
+    }
+  } catch {
+    // Column width persistence is optional.
+  }
+}
+
+function saveColumnWidths() {
+  const storageKey = columnWidthStorageKey()
+
+  if (!storageKey || typeof window === 'undefined') {
+    return
+  }
+
+  try {
+    window.localStorage.setItem(
+      storageKey,
+      JSON.stringify({
+        version: 1,
+        sidebar: layoutWidths.value.sidebar,
+        items: layoutWidths.value.items,
+      }),
+    )
+  } catch {
+    // Column width persistence is optional.
+  }
+}
+
+function setColumnWidth(column, value, persist = false) {
+  layoutWidths.value = {
+    ...layoutWidths.value,
+    [column]: clampColumnWidth(column, value),
+  }
+
+  if (persist) {
+    saveColumnWidths()
+  }
+}
+
+function handleColumnResize(event) {
+  if (!activeColumnResize) {
+    return
+  }
+
+  setColumnWidth(
+    activeColumnResize.column,
+    activeColumnResize.startWidth
+      + event.clientX
+      - activeColumnResize.startX,
+  )
+}
+
+function stopColumnResize() {
+  if (!activeColumnResize) {
+    return
+  }
+
+  activeColumnResize = null
+  window.removeEventListener(
+    'pointermove',
+    handleColumnResize,
+  )
+  window.removeEventListener(
+    'pointerup',
+    stopColumnResize,
+  )
+  document.body.classList.remove(
+    'bw-column-resizing',
+  )
+  saveColumnWidths()
+}
+
+function startColumnResize(column, event) {
+  if (
+    event.button !== undefined
+    && event.button !== 0
+  ) {
+    return
+  }
+
+  event.preventDefault()
+  stopColumnResize()
+
+  activeColumnResize = {
+    column,
+    startX: event.clientX,
+    startWidth: layoutWidths.value[column],
+  }
+
+  document.body.classList.add(
+    'bw-column-resizing',
+  )
+  window.addEventListener(
+    'pointermove',
+    handleColumnResize,
+  )
+  window.addEventListener(
+    'pointerup',
+    stopColumnResize,
+  )
+}
+
+function resetColumnWidth(column) {
+  setColumnWidth(
+    column,
+    DEFAULT_COLUMN_WIDTHS[column],
+    true,
+  )
+}
+
+function resizeColumnWithKeyboard(column, event) {
+  if (event.key === 'Home') {
+    event.preventDefault()
+    resetColumnWidth(column)
+    return
+  }
+
+  if (
+    event.key !== 'ArrowLeft'
+    && event.key !== 'ArrowRight'
+  ) {
+    return
+  }
+
+  event.preventDefault()
+
+  const direction = event.key === 'ArrowRight'
+    ? 1
+    : -1
+  const step = event.shiftKey ? 48 : 16
+
+  setColumnWidth(
+    column,
+    layoutWidths.value[column] + direction * step,
+    true,
+  )
+}
+
+onBeforeUnmount(() => {
+  stopColumnResize()
 })
 
 function updateItemAttachments(payload) {
@@ -1133,6 +1498,7 @@ function onFilterChange({
   items: filteredItems,
   label,
   trash = false,
+  context = null,
 }) {
   visibleItems.value = Array.isArray(filteredItems)
     ? filteredItems
@@ -1142,6 +1508,9 @@ function onFilterChange({
     || t('nc_bitwarden', 'All items')
 
   trashMode.value = Boolean(trash)
+  activeCreateContext.value = trash
+    ? null
+    : context
 }
 
 function openRelatedItem(candidate) {
@@ -1460,11 +1829,19 @@ function cipherItemIsPersonal(item) {
 }
 
 function canEditCipherItem(item) {
+  if (item?.decryptionFailed) {
+    return false
+  }
+
   return cipherItemIsPersonal(item)
     || item?.edit === true
 }
 
 function canViewPasswordForCipherItem(item) {
+  if (item?.decryptionFailed) {
+    return false
+  }
+
   return cipherItemIsPersonal(item)
     || item?.viewPassword === true
 }
@@ -1508,11 +1885,19 @@ function canDuplicateCipherItem(item) {
 }
 
 function canDeleteCipherItem(item) {
+  if (item?.decryptionFailed) {
+    return false
+  }
+
   return cipherItemIsPersonal(item)
     || item?.permissions?.delete === true
 }
 
 function canRestoreCipherItem(item) {
+  if (item?.decryptionFailed) {
+    return false
+  }
+
   return cipherItemIsPersonal(item)
     || item?.permissions?.restore === true
 }
@@ -2513,14 +2898,47 @@ async function onSaved(payload) {
   }
 }
 
+function newItemDraftForCurrentContext() {
+  const context = activeCreateContext.value
+
+  if (context?.type === 'folder') {
+    return {
+      folderId: context.folderId ?? '',
+    }
+  }
+
+  if (
+    context?.type === 'collection'
+    && context.organizationId
+    && context.collectionId
+  ) {
+    return {
+      organizationId: context.organizationId,
+      collectionIds: [context.collectionId],
+    }
+  }
+
+  return null
+}
+
 function openNewForm() {
   closeBulkAction()
-  editItem.value = null
+  editItem.value = newItemDraftForCurrentContext()
   showForm.value = true
   selectedItem.value = null
 }
 
 function openEditForm(item) {
+  if (item?.decryptionFailed) {
+    alert(
+      t(
+        'nc_bitwarden',
+        'This item could not be decrypted completely and is therefore read-only.',
+      ),
+    )
+    return
+  }
+
   if (
     item?.deletedDate
     || !canEditCipherItem(item)
@@ -2671,29 +3089,63 @@ function openEditForm(item) {
 }
 
 .bw-layout__sidebar {
-  width:         400px;
-  min-width:     400px;
-  max-width:     400px;
-  flex-shrink:   0;
-  border-right:  1px solid var(--color-border);
-  overflow:      hidden;
-  display:       flex;
+  width: var(--warden-sidebar-width, 400px);
+  min-width: 240px;
+  max-width: 720px;
+  flex: 0 0 var(--warden-sidebar-width, 400px);
+  overflow: hidden;
+  display: flex;
   flex-direction: column;
-  background:    var(--color-navigation-bg, var(--color-main-background-translucent));
+  background: var(--color-navigation-bg, var(--color-main-background-translucent));
 }
 
 .bw-layout__items {
-  width:         400px;
-  min-width:     400px;
-  max-width:     400px;
-  flex-shrink:   0;
-  overflow:      hidden;
-  border-right:  1px solid var(--color-border);
-  background:    var(--color-main-background);
+  width: var(--warden-items-width, 400px);
+  min-width: 280px;
+  max-width: 760px;
+  flex: 0 0 var(--warden-items-width, 400px);
+  overflow: hidden;
+  background: var(--color-main-background);
+}
+
+.bw-layout__resizer {
+  position: relative;
+  width: 8px;
+  min-width: 8px;
+  flex: 0 0 8px;
+  cursor: col-resize;
+  touch-action: none;
+  background: var(--color-main-background);
+}
+
+.bw-layout__resizer::after {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 3px;
+  width: 2px;
+  background: var(--color-border);
+  content: '';
+  transition: background-color 120ms ease;
+}
+
+.bw-layout__resizer:hover::after,
+.bw-layout__resizer:focus-visible::after {
+  background: var(--color-primary-element);
+}
+
+.bw-layout__resizer:focus-visible {
+  outline: 2px solid var(--color-primary-element);
+  outline-offset: -2px;
+}
+
+:global(body.bw-column-resizing) {
+  cursor: col-resize !important;
+  user-select: none !important;
 }
 
 .bw-layout__main {
-  min-width:      480px;
+  min-width:      360px;
   flex:           1;
   overflow-y:     auto;
   /* Hintergrund identisch zur Sidebar – einheitliches Erscheinungsbild */

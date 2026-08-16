@@ -74,26 +74,93 @@ export async function stretchMasterKey(masterKeyBuffer) {
  * Parsed AES-EncStrings (Typ 0/1/2) → { type, iv, ct, mac }
  * Parsed RSA-EncStrings (Typ 3/4/5/6) → { type, ct }  (kein IV)
  */
+const AES_BLOCK_BYTES = 16
+const HMAC_SHA256_BYTES = 32
+
+function decodeEncStringPart(value, label) {
+  try {
+    const decoded = b64ToBuffer(value)
+
+    if (decoded.byteLength === 0) {
+      throw new Error('empty value')
+    }
+
+    return decoded
+  } catch (exception) {
+    throw new Error(
+      `Invalid ${label} in encrypted string.`,
+      { cause: exception },
+    )
+  }
+}
+
 export function parseEncString(encStr) {
   if (!encStr || typeof encStr !== 'string') return null
-  const dotIdx = encStr.indexOf('.')
-  if (dotIdx < 0) return null
-  const type = parseInt(encStr.substring(0, dotIdx), 10)
-  const parts = encStr.substring(dotIdx + 1).split('|')
 
-  // RSA-Typen 3/4/5/6: kein IV, nur Ciphertext (+ optionaler MAC)
-  if (type >= 3 && type <= 6) {
-    if (!parts[0]) return null
-    return { type, ct: b64ToBuffer(parts[0]), mac: parts[1] ? b64ToBuffer(parts[1]) : null }
+  const dotIdx = encStr.indexOf('.')
+  if (dotIdx < 1) return null
+
+  const type = Number(encStr.slice(0, dotIdx))
+
+  if (!Number.isInteger(type) || type < 0 || type > 6) {
+    throw new Error('Unsupported encrypted string type.')
   }
 
-  // AES-Typen 0/1/2: IV | CT | MAC
-  if (parts.length < 2) return null
+  const parts = encStr.slice(dotIdx + 1).split('|')
+
+  if (type >= 3) {
+    if (parts.length < 1 || parts.length > 2 || !parts[0]) {
+      throw new Error('Invalid RSA encrypted string.')
+    }
+
+    return {
+      type,
+      ct: decodeEncStringPart(parts[0], 'RSA ciphertext'),
+      mac: parts[1]
+        ? decodeEncStringPart(parts[1], 'RSA MAC')
+        : null,
+    }
+  }
+
+  if (
+    parts.length < 2
+    || parts.length > 3
+    || !parts[0]
+    || !parts[1]
+  ) {
+    throw new Error('Invalid AES encrypted string.')
+  }
+
+  const iv = decodeEncStringPart(parts[0], 'IV')
+  const ct = decodeEncStringPart(parts[1], 'ciphertext')
+  const mac = parts[2]
+    ? decodeEncStringPart(parts[2], 'HMAC')
+    : null
+
+  if (iv.byteLength !== AES_BLOCK_BYTES) {
+    throw new Error('Invalid IV length in encrypted string.')
+  }
+
+  if (
+    ct.byteLength === 0
+    || ct.byteLength % AES_BLOCK_BYTES !== 0
+  ) {
+    throw new Error('Invalid ciphertext length in encrypted string.')
+  }
+
+  if ((type === 1 || type === 2) && !mac) {
+    throw new Error('Encrypted string is missing its HMAC.')
+  }
+
+  if (mac && mac.byteLength !== HMAC_SHA256_BYTES) {
+    throw new Error('Invalid HMAC length in encrypted string.')
+  }
+
   return {
     type,
-    iv: b64ToBuffer(parts[0]),
-    ct: b64ToBuffer(parts[1]),
-    mac: parts[2] ? b64ToBuffer(parts[2]) : null,
+    iv,
+    ct,
+    mac,
   }
 }
 
@@ -109,13 +176,61 @@ async function verifyHmac(iv, ct, mac, macKeyBuffer) {
 
 export async function decryptEncStringRaw(encStr, encKeyBuffer, macKeyBuffer) {
   const parsed = parseEncString(encStr)
-  if (!parsed) throw new Error(`Ungültiger EncString: ${String(encStr).substring(0, 20)}`)
-  if (parsed.mac && macKeyBuffer) {
-    const valid = await verifyHmac(parsed.iv, parsed.ct, parsed.mac, macKeyBuffer)
-    if (!valid) throw new Error('HMAC-Verifikation fehlgeschlagen')
+
+  if (!parsed) {
+    throw new Error(
+      `Invalid encrypted string: ${String(encStr).substring(0, 20)}`,
+    )
   }
-  const decKey = await crypto.subtle.importKey('raw', encKeyBuffer, { name: 'AES-CBC' }, false, ['decrypt'])
-  return crypto.subtle.decrypt({ name: 'AES-CBC', iv: parsed.iv }, decKey, parsed.ct)
+
+  if (parsed.type > 2 || !parsed.iv) {
+    throw new Error(
+      `Encrypted string type ${parsed.type} is not an AES payload.`,
+    )
+  }
+
+  const encryptionKeyLength = encKeyBuffer?.byteLength ?? 0
+
+  if (![16, 24, 32].includes(encryptionKeyLength)) {
+    throw new Error('Invalid AES encryption key length.')
+  }
+
+  if (parsed.type === 1 || parsed.type === 2) {
+    if (!parsed.mac || !macKeyBuffer) {
+      throw new Error('Authenticated encrypted string is missing its HMAC key.')
+    }
+  }
+
+  if (parsed.mac) {
+    if (macKeyBuffer?.byteLength !== HMAC_SHA256_BYTES) {
+      throw new Error('Invalid HMAC key length.')
+    }
+
+    const valid = await verifyHmac(
+      parsed.iv,
+      parsed.ct,
+      parsed.mac,
+      macKeyBuffer,
+    )
+
+    if (!valid) {
+      throw new Error('HMAC verification failed.')
+    }
+  }
+
+  const decKey = await crypto.subtle.importKey(
+    'raw',
+    encKeyBuffer,
+    { name: 'AES-CBC' },
+    false,
+    ['decrypt'],
+  )
+
+  return crypto.subtle.decrypt(
+    { name: 'AES-CBC', iv: parsed.iv },
+    decKey,
+    parsed.ct,
+  )
 }
 
 /** decryptEncString gibt '' zurück wenn encStr leer/null – kein Crash */
@@ -129,9 +244,23 @@ export async function decryptEncString(encStr, encKeyBuffer, macKeyBuffer) {
 
 export async function decryptUserSymmetricKey(encKeyString, masterKeyBuffer) {
   const stretched = await stretchMasterKey(masterKeyBuffer)
-  const raw = await decryptEncStringRaw(encKeyString, stretched.encKey, stretched.macKey)
+  const raw = await decryptEncStringRaw(
+    encKeyString,
+    stretched.encKey,
+    stretched.macKey,
+  )
   const bytes = new Uint8Array(raw)
-  return { encKey: bytes.slice(0, 32).buffer, macKey: bytes.slice(32, 64).buffer }
+
+  if (bytes.byteLength !== 64) {
+    throw new Error(
+      `Invalid decrypted user key length: ${bytes.byteLength}; expected 64.`,
+    )
+  }
+
+  return {
+    encKey: bytes.slice(0, 32).buffer,
+    macKey: bytes.slice(32, 64).buffer,
+  }
 }
 
 // ─── RSA: Organisation-Key Decryption ─────────────────────────────────────────
@@ -471,26 +600,61 @@ export async function generateEncryptedRsaKeyPair(userKey) {
  * @param {Object} orgKeys – Map { orgId → { encKey, macKey } } (kann leer sein)
  */
 export async function decryptCipher(cipher, userKey, orgKeys = {}) {
-  // Richtigen Schlüssel wählen: Org-Cipher → orgKey, Personal → userKey
-  const key = (cipher.OrganizationId && orgKeys[cipher.OrganizationId])
-    ? orgKeys[cipher.OrganizationId]
-    : userKey
-
-  // Fehler je Feld abfangen – ein fehlendes Feld killt nicht den ganzen Eintrag
-  const dec = async (s) => {
-    if (!s) return ''
-    try {
-      return await decryptEncString(s, key.encKey, key.macKey)
-    } catch (e) {
-      console.warn('[nc_bitwarden] Feld-Entschlüsselung fehlgeschlagen:', e.message)
-      return ''
-    }
-  }
-
   const organizationId =
     cipher.OrganizationId
     ?? cipher.organizationId
     ?? null
+
+  let key = userKey
+
+  if (organizationId) {
+    key = orgKeys[organizationId]
+      ?? Object.entries(orgKeys).find(([id]) =>
+        String(id).toLowerCase()
+          === String(organizationId).toLowerCase(),
+      )?.[1]
+      ?? null
+  }
+
+  if (!key?.encKey || !key?.macKey) {
+    throw new Error(
+      organizationId
+        ? `No organization key is available for cipher ${cipher.Id ?? cipher.id ?? ''}.`
+        : 'The user encryption key is unavailable.',
+    )
+  }
+
+  const decryptionErrors = []
+
+  function recordDecryptionError(field, exception) {
+    if (decryptionErrors.length >= 32) {
+      return
+    }
+
+    decryptionErrors.push({
+      field,
+      message: exception?.message ?? String(exception),
+    })
+  }
+
+  const dec = async (value, field = 'encrypted field') => {
+    if (!value) return ''
+
+    try {
+      return await decryptEncString(
+        value,
+        key.encKey,
+        key.macKey,
+      )
+    } catch (exception) {
+      recordDecryptionError(field, exception)
+      console.warn(
+        `[nc_bitwarden] Decryption failed for ${field}:`,
+        exception?.message ?? exception,
+      )
+      return ''
+    }
+  }
 
   /*
    * Vaultwarden berechnet die effektiven Rechte pro Cipher.
@@ -645,6 +809,7 @@ export async function decryptCipher(cipher, userKey, orgKeys = {}) {
           unavailable: false,
         }
       } catch (exception) {
+        recordDecryptionError('attachment key', exception)
         console.warn(
           '[nc_bitwarden] Anhangsschlüssel konnte '
             + 'nicht entschlüsselt werden:',
@@ -821,6 +986,18 @@ export async function decryptCipher(cipher, userKey, orgKeys = {}) {
       value: await dec(f.Value),
       linkedId: f.LinkedId ?? null,
     })))
+  }
+
+  base.decryptionErrors = decryptionErrors
+  base.decryptionFailed = decryptionErrors.length > 0
+
+  if (base.decryptionFailed) {
+    base.edit = false
+    base.viewPassword = false
+    base.permissions = {
+      delete: false,
+      restore: false,
+    }
   }
 
   return base

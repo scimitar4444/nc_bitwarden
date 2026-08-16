@@ -2,6 +2,24 @@
 
 All notable changes to Warden are documented in this file.
 
+## Unreleased
+
+### Added
+
+- Navigation and item columns can be resized with the mouse or keyboard
+- Column widths are stored per Nextcloud user
+- Creating an item while a folder or collection is active preselects that target
+- Frontend crypto regression tests and continuous integration groundwork
+
+### Security and stability
+
+- Partially decrypted ciphers are visibly retained but made read-only
+- Missing organization keys no longer fall back to an unrelated user key
+- Authenticated encrypted strings require a valid HMAC and strict lengths
+- Unknown or unsupported KDF configurations are rejected instead of altered
+- Large vaults use bounded cipher-decryption concurrency
+- Failed settings loads can be retried during the same page session
+
 ## 2.2.2 - 2026-07-28
 
 Version 2.2.2 fixes the Nextcloud application bootstrap and release

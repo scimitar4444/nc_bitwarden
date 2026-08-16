@@ -2093,12 +2093,49 @@ watch(
   },
 )
 
+function currentCreateContext() {
+  if (selectedCollection.value !== null) {
+    const collection = allCollectionRows.value.find(row =>
+      normalizeId(row.id) === selectedCollection.value,
+    )
+
+    if (collection) {
+      return {
+        type: 'collection',
+        collectionId: collection.id,
+        organizationId: collection.organizationId,
+      }
+    }
+  }
+
+  if (selectedFolder.value !== null) {
+    if (selectedFolder.value === '__none__') {
+      return {
+        type: 'folder',
+        folderId: null,
+      }
+    }
+
+    const folder = (props.folders ?? []).find(candidate =>
+      normalizeId(candidate.id) === selectedFolder.value,
+    )
+
+    return {
+      type: 'folder',
+      folderId: folder?.id ?? selectedFolder.value,
+    }
+  }
+
+  return null
+}
+
 watch(
   [filtered, activeFilterLabel],
   ([filteredItems, label]) => {
     emit('filter-change', {
       items: [...filteredItems],
       label,
+      context: currentCreateContext(),
 
       trash:
         selectedCategory.value === 'trash',

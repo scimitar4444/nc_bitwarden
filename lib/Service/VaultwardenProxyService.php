@@ -1,6 +1,5 @@
 <?php
 
-
 namespace OCA\NcBitwarden\Service;
 
 use OCP\Http\Client\IClientService;
@@ -306,7 +305,6 @@ final class VaultwardenProxyService {
 			: [];
 	}
 
-
 	/**
 	 * Lädt bereits im Browser verschlüsselte Anhangsdaten hoch.
 	 */
@@ -472,8 +470,8 @@ final class VaultwardenProxyService {
 				);
 			}
 
-			$downloadUrl =
-				$scheme
+			$downloadUrl
+				= $scheme
 				. '://'
 				. $host
 				. $port
@@ -767,8 +765,8 @@ final class VaultwardenProxyService {
 			) ?? ''
 		);
 
-		$expectedFingerprint =
-			$this->providerFingerprint($userId);
+		$expectedFingerprint
+			= $this->providerFingerprint($userId);
 
 		if (
 			$storedFingerprint === ''

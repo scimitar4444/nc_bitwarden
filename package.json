@@ -12,7 +12,8 @@
     "l10n:audit": "python3 scripts/check-l10n.py",
     "preflight:source": "python3 scripts/preflight.py",
     "preflight:built": "python3 scripts/preflight.py --after-build",
-    "verify": "npm run l10n:check && npm run preflight:source && npm run lint && npm run build && npm run preflight:built"
+    "verify": "npm run l10n:check && npm run preflight:source && npm run lint && npm test && npm run build && npm run preflight:built",
+    "test": "node --test tests/*.test.mjs"
   },
   "devDependencies": {
     "@nextcloud/axios": "^2.5.0",
@@ -34,5 +35,6 @@
   ],
   "overrides": {
     "fast-xml-parser": ">=5.5.7"
-  }
+  },
+  "type": "module"
 }

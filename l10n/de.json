@@ -640,7 +640,13 @@
         "Refresh vault": "Tresor aktualisieren",
         "Refreshing vault…": "Tresor wird aktualisiert …",
         "Finish editing before refreshing the vault.": "Schließe die Bearbeitung ab, bevor du den Tresor aktualisierst.",
-        "The vault could not be refreshed.": "Der Tresor konnte nicht aktualisiert werden."
+        "The vault could not be refreshed.": "Der Tresor konnte nicht aktualisiert werden.",
+        "Encrypted item unavailable": "Verschlüsselter Eintrag nicht verfügbar",
+        "Resize item column": "Eintragsspalte in der Breite ändern",
+        "Resize navigation column": "Navigationsspalte in der Breite ändern",
+        "The provider returned an unsupported key derivation configuration.": "Der Anbieter hat eine nicht unterstützte Konfiguration für die Schlüsselableitung zurückgegeben.",
+        "This item could not be decrypted completely and cannot be saved.": "Dieser Eintrag konnte nicht vollständig entschlüsselt werden und kann nicht gespeichert werden.",
+        "This item could not be decrypted completely and is therefore read-only.": "Dieser Eintrag konnte nicht vollständig entschlüsselt werden und ist daher schreibgeschützt."
     },
     "pluralForm": "nplurals=2; plural=(n != 1);"
 }

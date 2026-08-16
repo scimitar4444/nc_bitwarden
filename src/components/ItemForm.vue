@@ -1578,6 +1578,7 @@ const selectedCollections = computed(() => availableCollections.value.filter(col
 const collectionResults = computed(() => availableCollections.value.filter(collection => !collectionIsSelected(collection.id)).filter(collection => !collection.readOnly).filter(collection => collectionMatchesQuery(collection, collectionSearch.value)))
 
 const canSave = computed(() => {
+  if (props.item?.decryptionFailed) return false
   if (!form.name.trim() || fieldEditor.open || invalidLinkedFieldCount.value > 0) return false
   if (form.organizationId && targetCollectionIds().length === 0) return false
   if (selectedType.value === 5) {
@@ -2435,6 +2436,14 @@ function itemSaveErrorMessage(exception) {
 }
 
 async function save() {
+  if (props.item?.decryptionFailed) {
+    error.value = t(
+      'nc_bitwarden',
+      'This item could not be decrypted completely and cannot be saved.',
+    )
+    return
+  }
+
   /*
    * Stufe 2O-2: schreibgeschützte Einträge dürfen auch dann
    * nicht gespeichert werden, wenn save() künstlich ausgelöst
