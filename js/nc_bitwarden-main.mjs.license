@@ -1,0 +1,66 @@
+SPDX-License-Identifier: AGPL-3.0-or-later
+SPDX-License-Identifier: GPL-3.0-or-later
+SPDX-License-Identifier: MIT
+SPDX-License-Identifier: undefined
+SPDX-FileCopyrightText: Anthony Fu <https://github.com/antfu>
+SPDX-FileCopyrightText: David Clark
+SPDX-FileCopyrightText: Guillaume Chau <guillaume.b.chau@gmail.com>
+SPDX-FileCopyrightText: Jeff Sagal <sagalbot@gmail.com>
+SPDX-FileCopyrightText: Nextcloud GmbH and Nextcloud contributors
+SPDX-FileCopyrightText: Rob Cresswell <robcresswell@pm.me>
+SPDX-FileCopyrightText: atomiks
+SPDX-FileCopyrightText: debounce developers
+SPDX-FileCopyrightText: nc_bitwarden developers
+
+This file is generated from multiple sources. Included packages:
+- @floating-ui/core
+	- version: 1.8.0
+	- license: MIT
+- @floating-ui/dom
+	- version: 1.1.1
+	- license: MIT
+- @floating-ui/dom
+	- version: 1.8.0
+	- license: MIT
+- @floating-ui/utils
+	- version: 0.2.12
+	- license: MIT
+- @nextcloud/capabilities
+	- version: 1.2.1
+	- license: GPL-3.0-or-later
+- @nextcloud/initial-state
+	- version: 3.0.0
+	- license: GPL-3.0-or-later
+- @nextcloud/logger
+	- version: 3.0.3
+	- license: GPL-3.0-or-later
+- @nextcloud/vue
+	- version: 9.9.0
+	- license: AGPL-3.0-or-later
+- @nextcloud/vue-select
+	- version: 4.1.0
+	- license: MIT
+- @vueuse/core
+	- version: 14.3.0
+	- license: MIT
+- @vueuse/shared
+	- version: 14.3.0
+	- license: MIT
+- debounce
+	- version: 3.0.0
+	- license: MIT
+- floating-vue
+	- version: 5.2.2
+	- license: MIT
+- focus-trap
+	- version: 8.2.2
+	- license: MIT
+- nc_bitwarden
+	- version: 2.2.2
+	- license: undefined
+- tabbable
+	- version: 6.5.0
+	- license: MIT
+- vue-material-design-icons
+	- version: 5.3.1
+	- license: MIT

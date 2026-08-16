@@ -1,0 +1,12 @@
+SPDX-License-Identifier: MIT
+SPDX-License-Identifier: undefined
+SPDX-FileCopyrightText: Evan You
+SPDX-FileCopyrightText: nc_bitwarden developers
+
+This file is generated from multiple sources. Included packages:
+- nc_bitwarden
+	- version: 2.2.2
+	- license: undefined
+- vite
+	- version: 7.3.6
+	- license: MIT
