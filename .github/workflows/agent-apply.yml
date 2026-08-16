@@ -146,6 +146,7 @@ jobs:
         shell: bash
         run: |
           rm -f .agent/apply_changes.py
+          rm -f .github/workflows/ci.yml
           rmdir .agent 2>/dev/null || true
           git config user.name "openai-agent"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"

@@ -15,10 +15,25 @@ if anchor not in changelog:
     changelog = changelog.replace(current, current + anchor, 1)
     changelog_path.write_text(changelog, encoding="utf-8")
 
-previous_script = subprocess.check_output(
-    ["git", "show", "HEAD^:.agent/apply_changes.py"],
+revisions = subprocess.check_output(
+    ["git", "rev-list", "HEAD", "--", ".agent/apply_changes.py"],
     cwd=root,
-)
+    text=True,
+).splitlines()
+
+previous_script = None
+for revision in revisions[1:]:
+    candidate = subprocess.check_output(
+        ["git", "show", f"{revision}:.agent/apply_changes.py"],
+        cwd=root,
+    )
+    if candidate.startswith(b"import base64,gzip\npayload = ("):
+        previous_script = candidate
+        break
+
+if previous_script is None:
+    raise SystemExit("Could not locate the validated backend hardening script")
+
 temporary_script = root / ".agent" / "previous_apply.py"
 temporary_script.write_bytes(previous_script)
 
