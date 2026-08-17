@@ -73,8 +73,8 @@ jobs:
           -print0
           | xargs -0 -n1 php -l
 
-  php-quality:
-    name: PHP coding standard and Psalm
+  php-coding-standard:
+    name: PHP coding standard
     runs-on: ubuntu-latest
     timeout-minutes: 20
 
@@ -97,6 +97,28 @@ jobs:
 
       - name: Check PHP coding standard
         run: composer cs:check
+
+  php-static-analysis:
+    name: PHP static analysis
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      - name: Set up PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          tools: composer:v2
+          coverage: none
+
+      - name: Install PHP development tools
+        run: composer install --no-interaction --prefer-dist --no-progress
+
+      - name: Validate Composer metadata
+        run: composer validate --no-check-publish
 
       - name: Run Psalm
         run: composer psalm

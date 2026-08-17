@@ -135,8 +135,8 @@ final class VaultwardenProxyService {
 			$formParams['twoFactorToken'] = trim(
 				(string)$credentials['twoFactorToken'],
 			);
-			$formParams['twoFactorRemember'] =
-				!empty($credentials['twoFactorRemember'])
+			$formParams['twoFactorRemember']
+				= !empty($credentials['twoFactorRemember'])
 					? '1'
 					: '0';
 		}
@@ -188,8 +188,8 @@ final class VaultwardenProxyService {
 							),
 						),
 						'error' => $body['error'] ?? 'invalid_grant',
-						'error_description' =>
-							$body['error_description']
+						'error_description'
+							=> $body['error_description']
 							?? 'Two factor required.',
 					];
 				}
@@ -414,13 +414,13 @@ final class VaultwardenProxyService {
 					[
 						'name' => 'data',
 						'contents' => $handle,
-						'filename' =>
-							$encryptedFileName !== ''
+						'filename'
+							=> $encryptedFileName !== ''
 								? $encryptedFileName
 								: 'data',
 						'headers' => [
-							'Content-Type' =>
-								'application/octet-stream',
+							'Content-Type'
+								=> 'application/octet-stream',
 						],
 					],
 				],
@@ -495,8 +495,8 @@ final class VaultwardenProxyService {
 			'Anhangs-Metadaten',
 		);
 
-		$downloadUrl =
-			$metadata['url']
+		$downloadUrl
+			= $metadata['url']
 			?? $metadata['Url']
 			?? null;
 
@@ -528,8 +528,8 @@ final class VaultwardenProxyService {
 				);
 			}
 
-			$downloadUrl =
-				$scheme
+			$downloadUrl
+				= $scheme
 				. '://'
 				. $host
 				. $port
@@ -723,8 +723,8 @@ final class VaultwardenProxyService {
 
 		if (is_array($records)) {
 			foreach ($records as $record) {
-				$address =
-					$record['ip']
+				$address
+					= $record['ip']
 					?? $record['ipv6']
 					?? null;
 

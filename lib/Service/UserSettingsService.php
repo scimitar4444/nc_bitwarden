@@ -115,8 +115,8 @@ final class UserSettingsService {
 				self::TAB_UNLOCK_DEFAULT_KEY,
 				'1',
 			) !== '0',
-			'sso_password_min_length' =>
-				$this->getSsoPasswordMinLength(),
+			'sso_password_min_length'
+				=> $this->getSsoPasswordMinLength(),
 			'sso_password_require_lower' => $this->config->getAppValue(
 				$this->appName,
 				self::SSO_PASSWORD_REQUIRE_LOWER_KEY,
@@ -174,16 +174,16 @@ final class UserSettingsService {
 		$settings = $this->getAdminSettings();
 
 		return [
-			'min_length' =>
-				$settings['sso_password_min_length'],
-			'require_lower' =>
-				$settings['sso_password_require_lower'],
-			'require_upper' =>
-				$settings['sso_password_require_upper'],
-			'require_number' =>
-				$settings['sso_password_require_number'],
-			'require_special' =>
-				$settings['sso_password_require_special'],
+			'min_length'
+				=> $settings['sso_password_min_length'],
+			'require_lower'
+				=> $settings['sso_password_require_lower'],
+			'require_upper'
+				=> $settings['sso_password_require_upper'],
+			'require_number'
+				=> $settings['sso_password_require_number'],
+			'require_special'
+				=> $settings['sso_password_require_special'],
 		];
 	}
 
@@ -259,33 +259,33 @@ final class UserSettingsService {
 			&& $ssoEnabled
 			&& $serverType === 'selfhosted'
 		);
-		$allowUserOverride =
-			$classicLoginAllowed && $allowUserOverride;
+		$allowUserOverride
+			= $classicLoginAllowed && $allowUserOverride;
 
 		$values = [
 			self::DEFAULT_SERVER_TYPE_KEY => $serverType,
 			self::DEFAULT_CUSTOM_URL_KEY => $customUrl,
-			self::ALLOW_USER_OVERRIDE_KEY =>
-				$allowUserOverride ? '1' : '0',
-			self::SSO_ENABLED_KEY =>
-				$ssoEnabled ? '1' : '0',
-			self::CLASSIC_LOGIN_ALLOWED_KEY =>
-				$classicLoginAllowed ? '1' : '0',
-			self::PASSKEY_UNLOCK_ENABLED_KEY =>
-				$passkeyUnlockEnabled ? '1' : '0',
+			self::ALLOW_USER_OVERRIDE_KEY
+				=> $allowUserOverride ? '1' : '0',
+			self::SSO_ENABLED_KEY
+				=> $ssoEnabled ? '1' : '0',
+			self::CLASSIC_LOGIN_ALLOWED_KEY
+				=> $classicLoginAllowed ? '1' : '0',
+			self::PASSKEY_UNLOCK_ENABLED_KEY
+				=> $passkeyUnlockEnabled ? '1' : '0',
 			self::TAB_UNLOCK_MODE_KEY => $tabUnlockMode,
-			self::TAB_UNLOCK_DEFAULT_KEY =>
-				$tabUnlockDefault ? '1' : '0',
-			self::SSO_PASSWORD_MIN_LENGTH_KEY =>
-				(string)$ssoPasswordMinLength,
-			self::SSO_PASSWORD_REQUIRE_LOWER_KEY =>
-				$ssoPasswordRequireLower ? '1' : '0',
-			self::SSO_PASSWORD_REQUIRE_UPPER_KEY =>
-				$ssoPasswordRequireUpper ? '1' : '0',
-			self::SSO_PASSWORD_REQUIRE_NUMBER_KEY =>
-				$ssoPasswordRequireNumber ? '1' : '0',
-			self::SSO_PASSWORD_REQUIRE_SPECIAL_KEY =>
-				$ssoPasswordRequireSpecial ? '1' : '0',
+			self::TAB_UNLOCK_DEFAULT_KEY
+				=> $tabUnlockDefault ? '1' : '0',
+			self::SSO_PASSWORD_MIN_LENGTH_KEY
+				=> (string)$ssoPasswordMinLength,
+			self::SSO_PASSWORD_REQUIRE_LOWER_KEY
+				=> $ssoPasswordRequireLower ? '1' : '0',
+			self::SSO_PASSWORD_REQUIRE_UPPER_KEY
+				=> $ssoPasswordRequireUpper ? '1' : '0',
+			self::SSO_PASSWORD_REQUIRE_NUMBER_KEY
+				=> $ssoPasswordRequireNumber ? '1' : '0',
+			self::SSO_PASSWORD_REQUIRE_SPECIAL_KEY
+				=> $ssoPasswordRequireSpecial ? '1' : '0',
 		];
 
 		foreach ($values as $key => $value) {
@@ -301,18 +301,18 @@ final class UserSettingsService {
 		$settings = $this->getAdminSettings();
 
 		return [
-			'enabled' =>
-				$settings['organization_notice_enabled'],
-			'title' =>
-				$settings['organization_notice_title'],
-			'message' =>
-				$settings['organization_notice_message'],
-			'support_url' =>
-				$settings['organization_notice_support_url'],
-			'support_label' =>
-				$settings['organization_notice_support_label'],
-			'support_email' =>
-				$settings['organization_notice_support_email'],
+			'enabled'
+				=> $settings['organization_notice_enabled'],
+			'title'
+				=> $settings['organization_notice_title'],
+			'message'
+				=> $settings['organization_notice_message'],
+			'support_url'
+				=> $settings['organization_notice_support_url'],
+			'support_label'
+				=> $settings['organization_notice_support_label'],
+			'support_email'
+				=> $settings['organization_notice_support_email'],
 		];
 	}
 
@@ -426,18 +426,18 @@ final class UserSettingsService {
 		);
 
 		$values = [
-			self::ORGANIZATION_NOTICE_ENABLED_KEY =>
-				$settings['enabled'] ? '1' : '0',
-			self::ORGANIZATION_NOTICE_TITLE_KEY =>
-				$settings['title'],
-			self::ORGANIZATION_NOTICE_MESSAGE_KEY =>
-				$settings['message'],
-			self::ORGANIZATION_NOTICE_SUPPORT_URL_KEY =>
-				$settings['support_url'],
-			self::ORGANIZATION_NOTICE_SUPPORT_LABEL_KEY =>
-				$settings['support_label'],
-			self::ORGANIZATION_NOTICE_SUPPORT_EMAIL_KEY =>
-				$settings['support_email'],
+			self::ORGANIZATION_NOTICE_ENABLED_KEY
+				=> $settings['enabled'] ? '1' : '0',
+			self::ORGANIZATION_NOTICE_TITLE_KEY
+				=> $settings['title'],
+			self::ORGANIZATION_NOTICE_MESSAGE_KEY
+				=> $settings['message'],
+			self::ORGANIZATION_NOTICE_SUPPORT_URL_KEY
+				=> $settings['support_url'],
+			self::ORGANIZATION_NOTICE_SUPPORT_LABEL_KEY
+				=> $settings['support_label'],
+			self::ORGANIZATION_NOTICE_SUPPORT_EMAIL_KEY
+				=> $settings['support_email'],
 		];
 
 		foreach ($values as $key => $value) {
@@ -518,16 +518,16 @@ final class UserSettingsService {
 				$effectiveSso
 				&& $adminSettings['passkey_unlock_enabled']
 			),
-			'tab_unlock_mode' =>
-				$adminSettings['tab_unlock_mode'],
-			'tab_unlock_default' =>
-				$adminSettings['tab_unlock_default'],
-			'organization_notice' =>
-				$this->getOrganizationNoticeSettings(),
-			'master_password_policy' =>
-				$this->getNewSsoPasswordPolicy(),
-			'preferences' =>
-				$this->getUserPreferences($userId),
+			'tab_unlock_mode'
+				=> $adminSettings['tab_unlock_mode'],
+			'tab_unlock_default'
+				=> $adminSettings['tab_unlock_default'],
+			'organization_notice'
+				=> $this->getOrganizationNoticeSettings(),
+			'master_password_policy'
+				=> $this->getNewSsoPasswordPolicy(),
+			'preferences'
+				=> $this->getUserPreferences($userId),
 		];
 	}
 
@@ -824,8 +824,8 @@ final class UserSettingsService {
 				min(8, (int)$value['passphrase_word_count']),
 			),
 			'passphrase_separator' => $passphraseSeparator,
-			'passphrase_capitalization' =>
-				$passphraseCapitalization,
+			'passphrase_capitalization'
+				=> $passphraseCapitalization,
 			'passphrase_include_number' => $this->boolValue(
 				$value['passphrase_include_number'],
 				$defaults['passphrase_include_number'],
@@ -967,8 +967,8 @@ final class UserSettingsService {
 
 		if (is_array($records)) {
 			foreach ($records as $record) {
-				$address =
-					$record['ip']
+				$address
+					= $record['ip']
 					?? $record['ipv6']
 					?? null;
 
