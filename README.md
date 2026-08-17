@@ -2,7 +2,7 @@
 
 > Native Bitwarden and Vaultwarden integration for Nextcloud
 
-![Version](https://img.shields.io/badge/Version-2.2.2-blue)
+![Version](https://img.shields.io/badge/Version-2.3.0-blue)
 ![Nextcloud](https://img.shields.io/badge/Nextcloud-31--34-0082C9?logo=nextcloud&logoColor=white)
 ![PHP](https://img.shields.io/badge/PHP-8.1+-777BB4?logo=php&logoColor=white)
 ![License](https://img.shields.io/badge/License-AGPL--3.0-green)
@@ -21,17 +21,20 @@ decrypted vault contents are not sent to Nextcloud.
 
 Warden is an independent integration and is not an official Bitwarden client.
 
-## What's new in 2.2.2
+## What's new in 2.3.0
 
-Warden 2.2.2 is a bootstrap and packaging hotfix.
+Warden 2.3.0 improves daily vault navigation, search, stability and
+performance.
 
-- Removed the empty custom Nextcloud bootstrap class
-- Moved the application ID constant to `AppConstants`
-- Prevented duplicate loading of the former `Application` class
-- Updated controllers and settings classes to use the neutral constant class
-- Extended the release preflight to enforce the new bootstrap architecture
-- Standardized runtime directory and file permissions
-- Verified Nextcloud CLI, web routes, SSO login and vault refresh
+- Resizable navigation and item columns with per-user persistence
+- Context-aware new items that inherit the active folder or writable
+  organization collection
+- Global vault search across personal items, organization items or both
+- Protection against saving entries with partially unreadable encrypted fields
+- Stricter organization-key, provider-response, token and KDF validation
+- Bounded parallel decryption and reuse of imported cryptographic keys
+- Safer attachment limits while transfers still require full buffering
+- New regression tests and continuous GitHub Actions verification
 
 For the complete list of changes, see `CHANGELOG.md`.
 
@@ -104,15 +107,21 @@ SSH keys can be displayed, edited and generated in the browser.
 - Encrypted attachment upload for providers using the direct upload flow
 - Encrypted attachment download
 - Attachment deletion
-- Configurable server-side attachment size limit
+- Configurable server-side attachment size limit, capped at 50 MiB while
+  transfers require full buffering
 - Client-side attachment encryption and decryption
 
 ### Navigation and management
 
 - Three-column Nextcloud interface
+- Resizable navigation and item columns with saved per-user widths
 - Personal and organization navigation
 - Folder and collection counters
-- Full-text search across names, usernames, URLs, notes, non-hidden custom fields, identity metadata, SSH public metadata and attachment names
+- Global full-text search independent of the selected category, folder or
+  collection
+- Search scopes for personal items, organization items or both vault areas
+- Search across names, usernames, URLs, notes, non-hidden custom fields,
+  identity metadata, SSH public metadata and attachment names
 - Favorites
 - TOTP category
 - SSH-key category
@@ -348,7 +357,7 @@ Extract the application into the Nextcloud application directory:
 
 ```bash
 cd /var/www/html/custom_apps
-tar -xzf nc_bitwarden-v2.2.0.tar.gz
+tar -xzf nc_bitwarden-2.3.0.tar.gz
 chown -R www-data:www-data nc_bitwarden
 ```
 
@@ -476,7 +485,7 @@ Example:
 
 ```bash
 docker cp \
-  nc_bitwarden-2.0.1.tar.gz \
+  nc_bitwarden-2.3.0.tar.gz \
   nextcloud-aio-nextcloud:/tmp/
 
 docker exec \
@@ -485,7 +494,7 @@ docker exec \
   sh -c '
     cd /var/www/html/custom_apps &&
     rm -rf nc_bitwarden &&
-    tar -xzf /tmp/nc_bitwarden-2.0.1.tar.gz &&
+    tar -xzf /tmp/nc_bitwarden-2.3.0.tar.gz &&
     chown -R www-data:www-data nc_bitwarden
   '
 

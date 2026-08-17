@@ -365,6 +365,9 @@ import {
   restoreSessionKey,
   saveSessionKey,
 } from './services/sessionKeyStore.js'
+import {
+  mapSettledWithConcurrency,
+} from './utils/concurrency.js'
 
 // camelCase (Vaultwarden) → PascalCase (Bitwarden Cloud) Normalizer
 function toPascal(o) {
@@ -386,6 +389,15 @@ const visibleItems = ref([])
 const activeFilterLabel = ref(
   t('nc_bitwarden', 'All items'),
 )
+
+const activeCreateContext = ref({
+  kind: 'category',
+  folderId: '',
+  organizationId: '',
+  collectionId: '',
+})
+
+const CIPHER_DECRYPT_CONCURRENCY = 16
 
 const trashMode = ref(false)
 
@@ -472,6 +484,8 @@ const isAdvancedMode = computed(() => (
 ))
 
 const organizationNoticeLoaded = ref(false)
+let organizationNoticeLoadingPromise = null
+
 const organizationNotice = ref({
   enabled: false,
   title: '',
@@ -514,28 +528,40 @@ const organizationNoticeEmailHref = computed(() => (
 
 async function loadOrganizationNoticeSettings() {
   if (organizationNoticeLoaded.value) {
-    return
+    return true
   }
 
-  try {
-    const settings = await VaultwardenApi.getSettings()
-    organizationNotice.value = {
-      ...organizationNotice.value,
-      ...(settings.organization_notice ?? {}),
+  if (organizationNoticeLoadingPromise) {
+    return organizationNoticeLoadingPromise
+  }
+
+  organizationNoticeLoadingPromise = (async () => {
+    try {
+      const settings = await VaultwardenApi.getSettings()
+
+      organizationNotice.value = {
+        ...organizationNotice.value,
+        ...(settings.organization_notice ?? {}),
+      }
+
+      userPreferences.value = normalizeUserPreferences(
+        settings.preferences,
+      )
+
+      organizationNoticeLoaded.value = true
+      return true
+    } catch (exception) {
+      console.warn(
+        '[nc_bitwarden] Organization notice settings could not be loaded:',
+        exception,
+      )
+      return false
+    } finally {
+      organizationNoticeLoadingPromise = null
     }
+  })()
 
-    userPreferences.value = normalizeUserPreferences(
-      settings.preferences,
-    )
-
-  } catch (exception) {
-    console.warn(
-      '[nc_bitwarden] Organization notice settings could not be loaded:',
-      exception,
-    )
-  } finally {
-    organizationNoticeLoaded.value = true
-  }
+  return organizationNoticeLoadingPromise
 }
 
 const defaultItemType = computed(() => {
@@ -546,7 +572,7 @@ const defaultItemType = computed(() => {
   return Number(userPreferences.value.default_item_type) || 1
 })
 
-const defaultTarget = computed(() => {
+const preferenceDefaultTarget = computed(() => {
   const mode = userPreferences.value.default_target_mode
 
   if (mode === 'personal') {
@@ -590,6 +616,36 @@ const defaultTarget = computed(() => {
     organizationId,
     collectionId,
   }
+})
+
+const defaultTarget = computed(() => {
+  const context = activeCreateContext.value
+
+  if (context.kind === 'folder') {
+    return {
+      organizationId: '',
+      collectionId: '',
+    }
+  }
+
+  if (context.kind === 'collection') {
+    const collection = collections.value.find(candidate =>
+      normalizeId(candidate.id)
+        === normalizeId(context.collectionId)
+      && normalizeId(candidate.organizationId)
+        === normalizeId(context.organizationId)
+      && !candidate.readOnly,
+    )
+
+    if (collection) {
+      return {
+        organizationId: collection.organizationId,
+        collectionId: collection.id,
+      }
+    }
+  }
+
+  return preferenceDefaultTarget.value
 })
 
 const SELECTED_ITEM_STORAGE_KEY =
@@ -899,15 +955,40 @@ async function loadVault() {
       .filter(result => result.status === 'fulfilled')
       .map(result => decorateCollection(result.value))
 
-    // Ciphers – ein Fehler killt nicht alle anderen
-    const cipherResults = await Promise.allSettled(
-      (sync.Ciphers ?? []).map(c => decryptCipher(c, userKey.value, orgKeys)),
+    // Bound the number of simultaneous WebCrypto operations.
+    const cipherResults = await mapSettledWithConcurrency(
+      sync.Ciphers ?? [],
+      CIPHER_DECRYPT_CONCURRENCY,
+      cipher => decryptCipher(
+        cipher,
+        userKey.value,
+        orgKeys,
+      ),
     )
-    const failed = cipherResults.filter(r => r.status === 'rejected').length
-    if (failed > 0) console.warn(`[nc_bitwarden] ${failed} Einträge konnten nicht entschlüsselt werden`)
+
+    const failed = cipherResults
+      .filter(result => result.status === 'rejected')
+      .length
+
+    if (failed > 0) {
+      console.warn(
+        `[nc_bitwarden] ${failed} Einträge konnten nicht entschlüsselt werden`,
+      )
+    }
+
     items.value = cipherResults
       .filter(result => result.status === 'fulfilled')
       .map(result => result.value)
+
+    const degraded = items.value.filter(item =>
+      item.decryptionFailed === true,
+    ).length
+
+    if (degraded > 0) {
+      console.warn(
+        `[nc_bitwarden] ${degraded} Einträge wurden wegen Entschlüsselungsfehlern schreibgeschützt`,
+      )
+    }
 
     if (restoreSelectedItemPending.value) {
       restoreSelectedItemFromStorage()
@@ -940,6 +1021,12 @@ function resetVaultState() {
   organizationKeys.value = {}
   visibleItems.value = []
   activeFilterLabel.value = t('nc_bitwarden', 'All items')
+  activeCreateContext.value = {
+    kind: 'category',
+    folderId: '',
+    organizationId: '',
+    collectionId: '',
+  }
   selectedItem.value = null
   showForm.value = false
   editItem.value = null
@@ -1133,6 +1220,7 @@ function onFilterChange({
   items: filteredItems,
   label,
   trash = false,
+  createContext = null,
 }) {
   visibleItems.value = Array.isArray(filteredItems)
     ? filteredItems
@@ -1142,6 +1230,24 @@ function onFilterChange({
     || t('nc_bitwarden', 'All items')
 
   trashMode.value = Boolean(trash)
+
+  const kind = ['folder', 'collection']
+    .includes(createContext?.kind)
+    ? createContext.kind
+    : 'category'
+
+  activeCreateContext.value = {
+    kind,
+    folderId: String(
+      createContext?.folderId ?? '',
+    ).trim(),
+    organizationId: String(
+      createContext?.organizationId ?? '',
+    ).trim(),
+    collectionId: String(
+      createContext?.collectionId ?? '',
+    ).trim(),
+  }
 }
 
 function openRelatedItem(candidate) {
@@ -1460,11 +1566,19 @@ function cipherItemIsPersonal(item) {
 }
 
 function canEditCipherItem(item) {
+  if (item?.decryptionFailed === true) {
+    return false
+  }
+
   return cipherItemIsPersonal(item)
     || item?.edit === true
 }
 
 function canViewPasswordForCipherItem(item) {
+  if (item?.decryptionFailed === true) {
+    return false
+  }
+
   return cipherItemIsPersonal(item)
     || item?.viewPassword === true
 }
@@ -2515,7 +2629,29 @@ async function onSaved(payload) {
 
 function openNewForm() {
   closeBulkAction()
-  editItem.value = null
+
+  const context = activeCreateContext.value
+
+  if (context.kind === 'folder') {
+    editItem.value = {
+      folderId: context.folderId || '',
+      organizationId: '',
+      collectionIds: [],
+    }
+  } else if (
+    context.kind === 'collection'
+    && context.organizationId
+    && context.collectionId
+  ) {
+    editItem.value = {
+      folderId: '',
+      organizationId: context.organizationId,
+      collectionIds: [context.collectionId],
+    }
+  } else {
+    editItem.value = null
+  }
+
   showForm.value = true
   selectedItem.value = null
 }

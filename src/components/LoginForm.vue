@@ -341,13 +341,15 @@ import LockOutlineIcon from 'vue-material-design-icons/LockOutline.vue'
 import { VaultwardenApi } from '../services/api.js'
 import {
   decryptUserSymmetricKey,
-  deriveMasterKeyArgon2id,
-  deriveMasterKeyPBKDF2,
   encryptUserSymmetricKey,
   generateEncryptedRsaKeyPair,
   generateUserSymmetricKey,
   makeMasterPasswordHash,
 } from '../services/crypto.js'
+import {
+  deriveMasterKey,
+  normalizeKdfParameters,
+} from '../services/kdf.js'
 import {
   unlockUserKeyWithPasskey,
 } from '../services/passkeyPrf.js'
@@ -1018,18 +1020,15 @@ async function createInitialMasterPassword() {
       generateEncryptedRsaKeyPair(userKey),
     ])
 
-    const kdfType = Number(loginData.Kdf ?? 0)
+    const kdfParameters = normalizeKdfParameters(
+      loginData,
+    )
+
     const payload = {
-      kdf: kdfType,
-      kdfIterations: Number(
-        loginData.KdfIterations ?? 600000,
-      ),
-      kdfMemory: kdfType === 1
-        ? Number(loginData.KdfMemory ?? 64)
-        : null,
-      kdfParallelism: kdfType === 1
-        ? Number(loginData.KdfParallelism ?? 4)
-        : null,
+      kdf: kdfParameters.type,
+      kdfIterations: kdfParameters.iterations,
+      kdfMemory: kdfParameters.memory,
+      kdfParallelism: kdfParameters.parallelism,
       key: encryptedUserKey,
       keys: rsaKeys,
       masterPasswordHash,
@@ -1226,10 +1225,12 @@ async function unlockSsoResult() {
       keepUnlocked: effectiveKeepUnlocked.value,
     })
   } catch (exception) {
-    error.value = t(
-      'nc_bitwarden',
-      'The master password is incorrect.',
-    )
+    error.value = exception?.code === 'unsupported_kdf'
+      ? exception.message
+      : t(
+        'nc_bitwarden',
+        'The master password is incorrect.',
+      )
 
     console.error(
       '[nc_bitwarden] SSO vault unlock failed:',
@@ -1366,60 +1367,6 @@ function normalizePasswordPolicy(policy) {
   }
 }
 
-async function deriveMasterKey(
-  password,
-  loginEmail,
-  kdfData,
-) {
-  const kdfType = Number(
-    kdfData.Kdf
-      ?? kdfData.kdf
-      ?? 0,
-  )
-
-  const kdfIterations = Math.min(
-    Number(
-      kdfData.KdfIterations
-        ?? kdfData.kdfIterations
-        ?? 600000,
-    ),
-    2_000_000,
-  )
-
-  const kdfMemory = Math.min(
-    Number(
-      kdfData.KdfMemory
-        ?? kdfData.kdfMemory
-        ?? 64,
-    ),
-    256,
-  )
-
-  const kdfParallelism = Math.min(
-    Number(
-      kdfData.KdfParallelism
-        ?? kdfData.kdfParallelism
-        ?? 4,
-    ),
-    16,
-  )
-
-  if (kdfType === 1) {
-    return deriveMasterKeyArgon2id(
-      password,
-      loginEmail,
-      kdfMemory,
-      kdfIterations,
-      kdfParallelism,
-    )
-  }
-
-  return deriveMasterKeyPBKDF2(
-    password,
-    loginEmail,
-    kdfIterations,
-  )
-}
 </script>
 
 <style scoped>

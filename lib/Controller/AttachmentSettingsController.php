@@ -10,13 +10,17 @@ use OCP\AppFramework\Http\JSONResponse;
 use OCP\IConfig;
 use OCP\IRequest;
 
-/**
- */
 final class AttachmentSettingsController extends Controller {
 	private const CONFIG_KEY = 'attachment_max_mb';
 	private const DEFAULT_MAX_MB = 25;
 	private const MIN_MAX_MB = 1;
-	private const MAX_MAX_MB = 1024;
+
+	/*
+	 * Attachments are currently processed as complete buffers in the
+	 * browser and PHP. A conservative upper bound prevents avoidable
+	 * memory exhaustion until a future streaming format is available.
+	 */
+	private const MAX_MAX_MB = 50;
 
 	public function __construct(
 		string $appName,
@@ -39,10 +43,11 @@ final class AttachmentSettingsController extends Controller {
 	}
 
 	/**
-	 * Ohne NoAdminRequired bleibt diese Methode Administratoren
-	 * vorbehalten.
+	 * Without NoAdminRequired this action remains admin-only.
 	 */
-	public function saveSettings(int $maxMb = 25): JSONResponse {
+	public function saveSettings(
+		int $maxMb = self::DEFAULT_MAX_MB,
+	): JSONResponse {
 		$normalized = $this->normalizeMaxMb($maxMb);
 
 		$this->config->setAppValue(

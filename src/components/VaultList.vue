@@ -22,7 +22,6 @@
         </button>
 
         <div
-          v-if="advancedMode"
           class="bw-vault__scope-switch"
           role="group"
           :aria-label="t('nc_bitwarden', 'Search scope')"
@@ -1016,7 +1015,6 @@ watch(
       return
     }
 
-    searchScope.value = 'both'
     sortMode.value = 'name-asc'
     collectionSearch.value = ''
   },
@@ -1700,28 +1698,63 @@ function searchableItemText(item) {
     .toLocaleLowerCase()
 }
 
+const normalizedSearchTerm = computed(() => (
+  search.value
+    .trim()
+    .toLocaleLowerCase()
+))
+
+function searchScopeMatches(item) {
+  const organizationId = normalizeId(
+    item.organizationId,
+  )
+
+  if (searchScope.value === 'personal') {
+    return organizationId === null
+  }
+
+  if (searchScope.value === 'organization') {
+    return organizationId !== null
+  }
+
+  return true
+}
+
 const filtered = computed(() => {
   let list = [...(props.items ?? [])]
 
-  // Ordner und Sammlungen dürfen keine gelöschten
-  // Einträge anzeigen.
-  if (selectedCategory.value !== 'trash') {
+  const term = normalizedSearchTerm.value
+  const searching = term.length > 0
+
+  /*
+   * Deleted entries remain isolated in the trash. A normal
+   * global search must never surface deleted vault items merely
+   * because another folder or collection is currently selected.
+   */
+  if (selectedCategory.value === 'trash') {
+    list = list.filter(item =>
+      isDeletedItem(item),
+    )
+  } else {
     list = list.filter(item =>
       !isDeletedItem(item),
     )
   }
 
-  if (searchScope.value === 'personal') {
+  if (searching) {
+    /*
+     * Search is deliberately independent of navigation context.
+     * The selected folder, collection or category is retained in
+     * the sidebar, but does not restrict search results.
+     */
     list = list.filter(item =>
-      normalizeId(item.organizationId) === null,
+      searchScopeMatches(item),
     )
-  } else if (searchScope.value === 'organization') {
-    list = list.filter(item =>
-      normalizeId(item.organizationId) !== null,
-    )
-  }
 
-  if (selectedCollection.value !== null) {
+    list = list.filter(item =>
+      searchableItemText(item).includes(term),
+    )
+  } else if (selectedCollection.value !== null) {
     list = list.filter(item =>
       itemBelongsToCollection(item, selectedCollection.value),
     )
@@ -1736,16 +1769,6 @@ const filtered = computed(() => {
   } else {
     list = list.filter(item =>
       categoryMatches(item, selectedCategory.value),
-    )
-  }
-
-  const term = search.value
-    .trim()
-    .toLocaleLowerCase()
-
-  if (term) {
-    list = list.filter(item =>
-      searchableItemText(item).includes(term),
     )
   }
 
@@ -1779,6 +1802,14 @@ const filtered = computed(() => {
   }
 })
 const activeFilterLabel = computed(() => {
+  if (normalizedSearchTerm.value) {
+    return t(
+      'nc_bitwarden',
+      'Results: {count}',
+      { count: filtered.value.length },
+    )
+  }
+
   if (selectedCollection.value !== null) {
     const collection = allCollectionRows.value.find(row =>
       normalizeId(row.id) === selectedCollection.value,
@@ -1805,6 +1836,48 @@ const activeFilterLabel = computed(() => {
   return categories.find(category =>
     category.id === selectedCategory.value,
   )?.label || t('nc_bitwarden', 'All items')
+})
+
+const activeCreateContext = computed(() => {
+  if (selectedCollection.value !== null) {
+    const collection = allCollectionRows.value.find(row =>
+      normalizeId(row.id) === selectedCollection.value,
+    )
+
+    if (collection && !collection.readOnly) {
+      return {
+        kind: 'collection',
+        folderId: '',
+        organizationId: String(
+          collection.organizationId ?? '',
+        ),
+        collectionId: String(collection.id ?? ''),
+      }
+    }
+  }
+
+  if (selectedFolder.value !== null) {
+    const folder = selectedFolder.value === '__none__'
+      ? null
+      : (props.folders ?? []).find(candidate =>
+        normalizeId(candidate.id)
+          === selectedFolder.value,
+      )
+
+    return {
+      kind: 'folder',
+      folderId: String(folder?.id ?? ''),
+      organizationId: '',
+      collectionId: '',
+    }
+  }
+
+  return {
+    kind: 'category',
+    folderId: '',
+    organizationId: '',
+    collectionId: '',
+  }
 })
 
 function closeCategoryMenuOnOutsidePointer(event) {
@@ -2094,11 +2167,16 @@ watch(
 )
 
 watch(
-  [filtered, activeFilterLabel],
-  ([filteredItems, label]) => {
+  [
+    filtered,
+    activeFilterLabel,
+    activeCreateContext,
+  ],
+  ([filteredItems, label, createContext]) => {
     emit('filter-change', {
       items: [...filteredItems],
       label,
+      createContext: { ...createContext },
 
       trash:
         selectedCategory.value === 'trash',

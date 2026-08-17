@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace OCA\NcBitwarden\Controller;
 
 use OCA\NcBitwarden\Service\UserSettingsService;
@@ -24,61 +26,26 @@ final class AdminSettingsController extends Controller {
 
 	public function saveSettings(): JSONResponse {
 		try {
-			$allowUserOverride = filter_var(
-				$this->request->getParam(
-					'allow_user_override',
-					true,
-				),
-				FILTER_VALIDATE_BOOLEAN,
-				FILTER_NULL_ON_FAILURE,
+			$allowUserOverride = $this->booleanParam(
+				'allow_user_override',
+				true,
 			);
-
-			if ($allowUserOverride === null) {
-				throw new \InvalidArgumentException(
-					'Invalid value for allow_user_override',
-				);
-			}
-
-			$ssoEnabled = filter_var(
-				$this->request->getParam(
-					'sso_enabled',
-					false,
-				),
-				FILTER_VALIDATE_BOOLEAN,
-				FILTER_NULL_ON_FAILURE,
+			$ssoEnabled = $this->booleanParam(
+				'sso_enabled',
+				false,
 			);
-
-			if ($ssoEnabled === null) {
-				throw new \InvalidArgumentException(
-					'Invalid value for sso_enabled',
-				);
-			}
-
-			$classicLoginAllowed = filter_var(
-				$this->request->getParam(
-					'classic_login_allowed',
-					true,
-				),
-				FILTER_VALIDATE_BOOLEAN,
-				FILTER_NULL_ON_FAILURE,
+			$classicLoginAllowed = $this->booleanParam(
+				'classic_login_allowed',
+				true,
 			);
-
-			if ($classicLoginAllowed === null) {
-				throw new \InvalidArgumentException(
-					'Invalid value for classic_login_allowed',
-				);
-			}
-
 			$passkeyUnlockEnabled = $this->booleanParam(
 				'passkey_unlock_enabled',
 				false,
 			);
-
 			$tabUnlockMode = (string)$this->request->getParam(
 				'tab_unlock_mode',
 				'user_choice',
 			);
-
 			$tabUnlockDefault = $this->booleanParam(
 				'tab_unlock_default',
 				true,
@@ -115,31 +82,39 @@ final class AdminSettingsController extends Controller {
 				false,
 			);
 
-			$organizationNoticeEnabled = $this->booleanParam(
-				'organization_notice_enabled',
-				false,
-			);
-			$organizationNoticeTitle = (string)$this->request->getParam(
-				'organization_notice_title',
-				'',
-			);
-			$organizationNoticeMessage = (string)$this->request->getParam(
-				'organization_notice_message',
-				'',
-			);
-			$organizationNoticeSupportUrl = (string)$this->request->getParam(
-				'organization_notice_support_url',
-				'',
-			);
-			$organizationNoticeSupportLabel = (string)$this->request->getParam(
-				'organization_notice_support_label',
-				'',
-			);
-			$organizationNoticeSupportEmail = (string)$this->request->getParam(
-				'organization_notice_support_email',
-				'',
-			);
+			$organizationNotice =
+				$this->settingsService
+					->validateOrganizationNoticeSettings(
+						$this->booleanParam(
+							'organization_notice_enabled',
+							false,
+						),
+						(string)$this->request->getParam(
+							'organization_notice_title',
+							'',
+						),
+						(string)$this->request->getParam(
+							'organization_notice_message',
+							'',
+						),
+						(string)$this->request->getParam(
+							'organization_notice_support_url',
+							'',
+						),
+						(string)$this->request->getParam(
+							'organization_notice_support_label',
+							'',
+						),
+						(string)$this->request->getParam(
+							'organization_notice_support_email',
+							'',
+						),
+					);
 
+			/*
+			 * Every field, including the separately stored notice, has
+			 * now been validated. Only now do we persist the request.
+			 */
 			$this->settingsService->saveAdminSettings(
 				(string)$this->request->getParam(
 					'server_type',
@@ -162,21 +137,22 @@ final class AdminSettingsController extends Controller {
 				$ssoPasswordRequireSpecial,
 			);
 
-			$this->settingsService->saveOrganizationNoticeSettings(
-				$organizationNoticeEnabled,
-				$organizationNoticeTitle,
-				$organizationNoticeMessage,
-				$organizationNoticeSupportUrl,
-				$organizationNoticeSupportLabel,
-				$organizationNoticeSupportEmail,
-			);
+			$this->settingsService
+				->saveOrganizationNoticeSettings(
+					$organizationNotice['enabled'],
+					$organizationNotice['title'],
+					$organizationNotice['message'],
+					$organizationNotice['support_url'],
+					$organizationNotice['support_label'],
+					$organizationNotice['support_email'],
+				);
 
 			return new JSONResponse([
 				'status' => 'ok',
 			]);
-		} catch (\InvalidArgumentException $e) {
+		} catch (\InvalidArgumentException $exception) {
 			return new JSONResponse(
-				['error' => $e->getMessage()],
+				['error' => $exception->getMessage()],
 				400,
 			);
 		}

@@ -2,6 +2,58 @@
 
 All notable changes to Warden are documented in this file.
 
+## 2.3.0 - 2026-08-17
+
+Version 2.3.0 improves vault navigation, global search, reliability and
+performance, with additional safeguards against partial or inconsistent data
+updates.
+
+### Added
+
+- Resizable navigation and item columns with per-user browser persistence
+- Keyboard-accessible column resize controls
+- Context-aware item creation that preselects the active personal folder or
+  writable organization collection
+- Global vault search that is independent of the selected category, folder or
+  collection
+- Search scopes for personal items, organization items or both vault areas
+- Regression tests for encryption, attachment integrity, partial decryption
+  failures, organization keys, KDF validation and bounded concurrency
+- GitHub Actions verification for tests, localization, PHP metadata, ESLint,
+  release preflight and production builds
+
+### Changed
+
+- Imported AES and HMAC keys are reused while decrypting a vault
+- Cipher decryption is limited to 16 concurrent items to reduce browser load
+- Attachment uploads are capped at 50 MiB while transfers still require full
+  browser and server buffering; the default remains 25 MiB
+- KDF parameters are now used exactly when supported instead of being silently
+  changed
+- Temporary settings-loading failures can be retried without reloading the
+  complete Nextcloud page
+
+### Fixed
+
+- Entries with partially unreadable encrypted fields remain visible but are
+  read-only, preventing unreadable values from being saved as empty
+- Organization entries fail safely when their organization key is unavailable
+- Invalid or unexpected provider JSON is reported as an upstream error instead
+  of being treated as an empty successful response
+- Existing token state is cleared before a new login token set is stored
+- User and administrator settings are fully validated before any values are
+  written
+- Search results no longer remain restricted to the currently selected folder,
+  collection or category
+
+### Validation
+
+- Complete `npm run verify` workflow passed after the functional changes
+- All six Node regression tests passed
+- PHP syntax, route metadata, localization, ESLint and production build passed
+- The release-candidate branch was installed successfully on a live Nextcloud
+  instance
+
 ## 2.2.2 - 2026-07-28
 
 Version 2.2.2 fixes the Nextcloud application bootstrap and release
