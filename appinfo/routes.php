@@ -18,6 +18,7 @@ return [
 		['name' => 'sso#result',   'url' => '/api/sso/result', 'verb' => 'GET'],
 		['name' => 'vaultwarden_api#sync',         'url' => '/api/sync',          'verb' => 'GET'],
 		['name' => 'vaultwarden_api#getCiphers',   'url' => '/api/ciphers',       'verb' => 'GET'],
+		['name' => 'vaultwarden_api#getCipher',    'url' => '/api/ciphers/{id}',  'verb' => 'GET'],
 		['name' => 'vaultwarden_api#createCipher',              'url' => '/api/ciphers',                  'verb' => 'POST'],
 		['name' => 'vaultwarden_api#createOrganizationCipher',  'url' => '/api/ciphers/create',           'verb' => 'POST'],
 		['name' => 'vaultwarden_api#shareCipher',               'url' => '/api/ciphers/{id}/share',       'verb' => 'POST'],

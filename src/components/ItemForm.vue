@@ -1042,6 +1042,10 @@ import {
   collectionMatchesQuery,
   collectionNameParts,
 } from '../utils/collectionSearch.js'
+import {
+  completeOwnerTransfer,
+  OWNER_TRANSFER_UNVERIFIED,
+} from '../utils/ownerTransfer.js'
 
 const props = defineProps({
   userKey: { type: Object, required: true },
@@ -2416,6 +2420,13 @@ function isCipherRevisionConflict(exception) {
 }
 
 function itemSaveErrorMessage(exception) {
+  if (exception?.code === OWNER_TRANSFER_UNVERIFIED) {
+    return t(
+      'nc_bitwarden',
+      'The source deletion could not be verified. The new item was preserved to prevent data loss. Reload the vault before making further changes.',
+    )
+  }
+
   if (isCipherRevisionConflict(exception)) {
     return t(
       'nc_bitwarden',
@@ -2553,39 +2564,28 @@ async function save() {
           )
         }
 
-        try {
-          await copyCipherAttachments(
+        await completeOwnerTransfer({
+          sourceId: props.item.id,
+          targetId: createdId,
+          copyAttachments: () => copyCipherAttachments(
             {
               ...props.item,
               attachments,
             },
             createdId,
             getEncryptionKey(),
-          )
-
-          await VaultwardenApi.deleteCipher(
-            props.item.id,
-          )
-        } catch (transferException) {
-          /*
-           * Rollback: Der alte Eintrag ist zu diesem Zeitpunkt
-           * noch vollständig vorhanden. Der unvollständige
-           * Ziel-Eintrag wird einschließlich seiner Anhänge
-           * wieder entfernt.
-           */
-          try {
-            await VaultwardenApi.deleteCipher(
-              createdId,
-            )
-          } catch (rollbackException) {
+          ),
+          deleteCipher: id =>
+            VaultwardenApi.deleteCipher(id),
+          getCipher: id =>
+            VaultwardenApi.getCipher(id),
+          onRollbackError: rollbackException => {
             console.error(
               '[nc_bitwarden] Owner-change rollback failed:',
               rollbackException,
             )
-          }
-
-          throw transferException
-        }
+          },
+        })
       }
     } else if (effectiveOrganizationId()) {
       raw = await VaultwardenApi.createOrganizationCipher({
