@@ -58,7 +58,7 @@ final class SettingsController extends Controller {
 			);
 		} catch (
 			\InvalidArgumentException
-			| \JsonException $e
+			|\JsonException $e
 		) {
 			return new JSONResponse(
 				['error' => $e->getMessage()],

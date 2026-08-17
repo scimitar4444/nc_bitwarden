@@ -82,8 +82,8 @@ final class AdminSettingsController extends Controller {
 				false,
 			);
 
-			$organizationNotice =
-				$this->settingsService
+			$organizationNotice
+				= $this->settingsService
 					->validateOrganizationNoticeSettings(
 						$this->booleanParam(
 							'organization_notice_enabled',

@@ -58,7 +58,7 @@ final class PasskeyUnlockService {
 			);
 		} catch (
 			\JsonException
-			| \InvalidArgumentException
+			|\InvalidArgumentException
 		) {
 			return [
 				'configured' => false,
@@ -198,12 +198,12 @@ final class PasskeyUnlockService {
 			array_unique(
 				array_filter(
 					array_map(
-						static fn (mixed $transport): string =>
-							trim((string)$transport),
+						static fn (mixed $transport): string
+							=> trim((string)$transport),
 						$transports,
 					),
-					static fn (string $transport): bool =>
-						in_array(
+					static fn (string $transport): bool
+						=> in_array(
 							$transport,
 							self::ALLOWED_TRANSPORTS,
 							true,

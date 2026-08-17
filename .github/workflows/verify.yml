@@ -12,6 +12,7 @@ permissions:
 
 jobs:
   verify:
+    name: Frontend, tests and release preflight
     runs-on: ubuntu-latest
     timeout-minutes: 20
 
@@ -39,3 +40,85 @@ jobs:
 
       - name: Run tests, lint, preflight, and production build
         run: npm run verify
+
+  php-syntax:
+    name: PHP ${{ matrix.php-version }} syntax
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    strategy:
+      fail-fast: false
+      matrix:
+        php-version:
+          - '8.1'
+          - '8.2'
+          - '8.3'
+          - '8.4'
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      - name: Set up PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ matrix.php-version }}
+          coverage: none
+
+      - name: Check PHP syntax
+        run: >-
+          find appinfo lib templates
+          -type f
+          -name '*.php'
+          -print0
+          | xargs -0 -n1 php -l
+
+  php-coding-standard:
+    name: PHP coding standard
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      - name: Set up PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          tools: composer:v2
+          coverage: none
+
+      - name: Install PHP development tools
+        run: composer install --no-interaction --prefer-dist --no-progress
+
+      - name: Validate Composer metadata
+        run: composer validate --no-check-publish
+
+      - name: Check PHP coding standard
+        run: composer cs:check
+
+  php-static-analysis:
+    name: PHP static analysis
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      - name: Set up PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          tools: composer:v2
+          coverage: none
+
+      - name: Install PHP development tools
+        run: composer install --no-interaction --prefer-dist --no-progress
+
+      - name: Validate Composer metadata
+        run: composer validate --no-check-publish
+
+      - name: Run Psalm
+        run: composer psalm

@@ -40,8 +40,8 @@ final class SsoService {
 	public function createAuthorizationUrl(string $userId): string {
 		$settings = $this->getSelfHostedSettings($userId);
 		$vaultBase = rtrim((string)$settings['custom_url'], '/');
-		$providerFingerprint =
-			$this->providerFingerprint($userId);
+		$providerFingerprint
+			= $this->providerFingerprint($userId);
 
 		$state = self::STATE_PREFIX . $this->base64Url(
 			random_bytes(32),
@@ -148,8 +148,8 @@ final class SsoService {
 			);
 		}
 
-		[$code, $verifier] =
-			$this->getPendingFlow($userId);
+		[$code, $verifier]
+			= $this->getPendingFlow($userId);
 
 		$exchange = $this->exchangeToken(
 			$userId,
@@ -216,8 +216,8 @@ final class SsoService {
 			) ?? ''
 		);
 
-		$currentProvider =
-			$this->providerFingerprint($userId);
+		$currentProvider
+			= $this->providerFingerprint($userId);
 
 		if (
 			$code === ''
@@ -268,8 +268,8 @@ final class SsoService {
 			) ?? ''
 		);
 
-		$currentProvider =
-			$this->providerFingerprint($userId);
+		$currentProvider
+			= $this->providerFingerprint($userId);
 
 		if (
 			$code === ''
@@ -556,7 +556,6 @@ final class SsoService {
 			],
 		];
 	}
-
 
 	private function loadAccountEmail(
 		string $userId,
