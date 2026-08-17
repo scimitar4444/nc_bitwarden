@@ -183,6 +183,14 @@ final class VaultwardenApiController extends Controller {
 	}
 
 	#[NoAdminRequired]
+	public function getCipher(string $id): JSONResponse {
+		return $this->proxy(
+			'GET',
+			'/ciphers/' . rawurlencode($id),
+		);
+	}
+
+	#[NoAdminRequired]
 	public function createCipher(): JSONResponse {
 		return $this->proxy(
 			'POST',

@@ -634,6 +634,7 @@ OC.L10N.register(
     "Save with Ctrl+Enter": "Mit Strg+Enter speichern",
     "The attachment size limit was saved.": "Das Größenlimit für Anhänge wurde gespeichert.",
     "The item was changed in another client. Your changes were not saved. Reload the vault and open the item again.": "Der Eintrag wurde in einem anderen Client geändert. Deine Änderungen wurden nicht gespeichert. Lade den Tresor neu und öffne den Eintrag erneut.",
+    "The source deletion could not be verified. The new item was preserved to prevent data loss. Reload the vault before making further changes.": "Das Löschen des ursprünglichen Eintrags konnte nicht bestätigt werden. Der neue Eintrag wurde beibehalten, um Datenverlust zu verhindern. Lade den Tresor neu, bevor du weitere Änderungen vornimmst.",
     "The notes could not be saved.": "Die Notizen konnten nicht gespeichert werden.",
     "The setting could not be saved.": "Die Einstellung konnte nicht gespeichert werden.",
     "Warden server": "Warden-Server",
