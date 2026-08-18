@@ -2,6 +2,45 @@
 
 All notable changes to Warden are documented in this file.
 
+## 2.4.0 - 2026-08-18
+
+Version 2.4.0 improves item-row readability, makes ownership transfers
+resilient to ambiguous provider responses and expands continuous verification
+across every supported PHP version.
+
+### Changed
+
+- Hidden desktop item actions no longer reserve horizontal space; titles and
+  subtitles can use the complete row width until actions are shown
+- Item actions remain permanently reachable in the normal layout on touch and
+  coarse-pointer devices
+- Ownership transfers verify whether the source item still exists after an
+  ambiguous deletion or network failure
+- A confirmed missing source completes the transfer, an existing source rolls
+  back the target, and an unverifiable result preserves the target to prevent
+  data loss
+
+### Fixed
+
+- Long item titles and subtitles are no longer truncated early by invisible
+  action controls
+- A connection failure after a successful server-side source deletion can no
+  longer cause the only remaining target item to be removed
+- Rollback failures retain the original transfer error for accurate reporting
+
+### Quality
+
+- Added six ownership-transfer regression tests for success, attachment-copy
+  failure, source-delete failure, confirmed deletion, unverifiable deletion
+  and rollback failure
+- Expanded PHP syntax verification to PHP 8.1, 8.2, 8.3 and 8.4
+- Added independent PHP coding-standard and Psalm jobs
+- Formatted the PHP codebase with the configured Nextcloud coding standard
+- All twelve regression tests, localization, release preflight, ESLint,
+  production build, PHP matrix, coding-standard and Psalm checks passed
+- The functional release candidate was installed and verified on a live
+  Nextcloud instance
+
 ## 2.3.0 - 2026-08-17
 
 Version 2.3.0 improves vault navigation, global search, reliability and
