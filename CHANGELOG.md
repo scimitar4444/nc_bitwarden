@@ -2,6 +2,34 @@
 
 All notable changes to Warden are documented in this file.
 
+## 2.4.1 - 2026-08-18
+
+Version 2.4.1 updates transitive frontend and build dependencies with
+available security fixes and corrects the public repository links.
+
+### Security
+
+- Updated DOMPurify from 3.4.12 to 3.4.13 to address the reported detached
+  subtree XSS vulnerability
+- Updated vulnerable transitive `brace-expansion`, `fast-uri` and `nanoid`
+  versions to their patched releases
+- Reduced the npm audit result from three high, one moderate and seven low
+  findings to seven low findings; the remaining reports are inherited through
+  the Nextcloud Vite polyfill toolchain and currently have no available fix
+
+### Fixed
+
+- The application issue link now points to the active GitHub repository
+- The source-installation example now clones the active GitHub repository
+
+### Validation
+
+- All twelve regression tests passed with the updated dependency tree
+- npm audit reports no critical, high or moderate vulnerabilities
+- Composer audit reports no advisories or abandoned packages
+- Localization, PHP 8.1–8.4 syntax, coding-standard, Psalm, release preflight,
+  ESLint and the production build passed
+
 ## 2.4.0 - 2026-08-18
 
 Version 2.4.0 improves item-row readability, makes ownership transfers
