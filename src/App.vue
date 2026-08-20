@@ -159,12 +159,12 @@
         <section class="bw-layout__items">
           <button
             type="button"
-            class="bw-layout__compact-back"
+            class="bw-layout__compact-back bw-layout__compact-back--navigation"
             @click="showNavigationPane"
           >
             <ChevronLeftIcon :size="20" />
             <span>
-              {{ t('nc_bitwarden', 'Back to navigation') }}
+              {{ t('nc_bitwarden', 'Navigation and search') }}
             </span>
           </button>
 
@@ -2900,6 +2900,22 @@ function openEditForm(item) {
 
 .bw-layout__compact-back {
   display: none;
+  min-height: 42px;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.45rem 0.75rem;
+  border: 0;
+  border-bottom: 1px solid var(--color-border);
+  background: var(--color-main-background);
+  color: var(--color-main-text);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.bw-layout__compact-back:hover,
+.bw-layout__compact-back:focus-visible {
+  background: var(--color-background-hover);
 }
 
 @container warden (max-width: 1199px) {
@@ -2939,6 +2955,28 @@ function openEditForm(item) {
   .bw-layout--main-open .bw-layout__main {
     display: flex;
     flex: 1 1 0;
+  }
+
+  .bw-layout--main-open:not([data-active-pane="navigation"])
+    .bw-layout__compact-back--navigation {
+    display: flex;
+  }
+
+  .bw-layout--main-open[data-active-pane="navigation"]
+    .bw-layout__sidebar {
+    display: flex;
+  }
+
+  .bw-layout--main-open[data-active-pane="navigation"]
+    .bw-layout__items {
+    width: auto !important;
+    flex: 1 1 0;
+    border-right: 0;
+  }
+
+  .bw-layout--main-open[data-active-pane="navigation"]
+    .bw-layout__main {
+    display: none;
   }
 }
 
@@ -3000,22 +3038,6 @@ function openEditForm(item) {
 
   .bw-layout__compact-back {
     display: flex;
-    min-height: 42px;
-    flex: 0 0 auto;
-    align-items: center;
-    gap: 0.35rem;
-    padding: 0.45rem 0.75rem;
-    border: 0;
-    border-bottom: 1px solid var(--color-border);
-    background: var(--color-main-background);
-    color: var(--color-main-text);
-    font-weight: 600;
-    cursor: pointer;
-  }
-
-  .bw-layout__compact-back:hover,
-  .bw-layout__compact-back:focus-visible {
-    background: var(--color-background-hover);
   }
 }
 

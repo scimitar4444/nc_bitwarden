@@ -41,7 +41,7 @@ OC.L10N.register(
     "Authenticator key (TOTP)": "Authentifikatorschlüssel (TOTP)",
     "Available": "Verfügbar",
     "Back to items": "Zurück zu den Einträgen",
-    "Back to navigation": "Zurück zur Navigation",
+    "Navigation and search": "Navigation & Suche",
     "Base domain": "Basis-Domain",
     "Base URL without /api or /identity": "Basis-URL ohne /api oder /identity",
     "Below": "Unterhalb von",
