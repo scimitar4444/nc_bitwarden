@@ -40,6 +40,8 @@ OC.L10N.register(
     "Authenticator code for SSO login": "Authenticator-Code für die SSO-Anmeldung",
     "Authenticator key (TOTP)": "Authentifikatorschlüssel (TOTP)",
     "Available": "Verfügbar",
+    "Back to items": "Zurück zu den Einträgen",
+    "Back to navigation": "Zurück zur Navigation",
     "Base domain": "Basis-Domain",
     "Base URL without /api or /identity": "Basis-URL ohne /api oder /identity",
     "Below": "Unterhalb von",
