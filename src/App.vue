@@ -143,6 +143,7 @@
             @generate-password="showPasswordGenerator = true"
             @settings="showWardenSettings = true"
             @filter-change="onFilterChange"
+            @show-search-results="showItemsPane"
             @navigate="showVaultList"
             @create-folder="openFolderDialog()"
             @edit-folder="openFolderDialog($event)"

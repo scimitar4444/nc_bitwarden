@@ -418,6 +418,7 @@ OC.L10N.register(
     "Show organization assignment notice": "Hinweis zur Organisationszuordnung anzeigen",
     "Show password history": "Passwortverlauf anzeigen",
     "Show private key": "Privaten Schlüssel anzeigen",
+    "Show results: {count}": "Treffer anzeigen: {count}",
     "Show value": "Wert anzeigen",
     "Sign-in failed": "Anmeldung fehlgeschlagen",
     "Signing in…": "Anmeldung läuft …",
