@@ -10,6 +10,8 @@
     right: 0;
     bottom: 0;
     overflow: hidden;
+    container-name: warden;
+    container-type: inline-size;
 }
 
 .bw-column-resizer {
@@ -54,6 +56,12 @@
 }
 
 @media (hover: none), (pointer: coarse) {
+    .bw-column-resizer {
+        display: none;
+    }
+}
+
+@container warden (max-width: 1199px) {
     .bw-column-resizer {
         display: none;
     }

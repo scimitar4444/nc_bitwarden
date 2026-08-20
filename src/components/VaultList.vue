@@ -8,6 +8,7 @@
           type="text"
           :placeholder="t('nc_bitwarden', 'Search…')"
           autocomplete="off"
+          @keydown.enter.prevent="showSearchResults"
         >
 
         <button
@@ -75,6 +76,23 @@
           </button>
         </div>
       </div>
+
+      <button
+        v-if="normalizedSearchTerm"
+        type="button"
+        class="bw-vault__search-results"
+        @click="showSearchResults"
+      >
+        <MagnifyIcon :size="18" />
+        <span>
+          {{ t(
+            'nc_bitwarden',
+            'Show results: {count}',
+            { count: filtered.length },
+          ) }}
+        </span>
+        <ChevronRightIcon :size="18" />
+      </button>
     </div>
 
     <!-- Sortierung -->
@@ -691,6 +709,7 @@ const emit = defineEmits([
   'generate-password',
   'settings',
   'filter-change',
+  'show-search-results',
   'navigate',
   'create-folder',
   'edit-folder',
@@ -1704,6 +1723,14 @@ const normalizedSearchTerm = computed(() => (
     .toLocaleLowerCase()
 ))
 
+function showSearchResults() {
+  if (!normalizedSearchTerm.value) {
+    return
+  }
+
+  emit('show-search-results')
+}
+
 function searchScopeMatches(item) {
   const organizationId = normalizeId(
     item.organizationId,
@@ -2254,6 +2281,10 @@ watch(
 .bw-vault__search-clear:hover,
 .bw-vault__search-clear:focus-visible {
   background: var(--color-background-hover);
+}
+
+.bw-vault__search-results {
+  display: none;
 }
 
 .bw-vault__sort {
@@ -2872,6 +2903,36 @@ watch(
 
 .bw-vault__scope-both > :last-child {
   margin-left: -3px;
+}
+
+@container warden (max-width: 760px) {
+  .bw-vault__search-results {
+    display: flex;
+    width: 100%;
+    min-height: 40px;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.45rem;
+    margin-top: 0.45rem;
+    padding: 0.4rem 0.65rem;
+    border: 1px solid var(--color-primary-element);
+    border-radius: var(--border-radius);
+    background: var(--color-primary-element-light);
+    color: var(--color-main-text);
+    font-weight: 600;
+    cursor: pointer;
+  }
+
+  .bw-vault__search-results:hover,
+  .bw-vault__search-results:focus-visible {
+    background: var(--color-background-hover);
+  }
+
+  .bw-vault__search-results span {
+    min-width: 0;
+    flex: 1;
+    text-align: left;
+  }
 }
 
 </style>

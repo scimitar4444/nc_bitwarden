@@ -260,7 +260,7 @@
           class="bw-settings__attachment-limit-input"
           type="number"
           min="1"
-          max="1024"
+          :max="MAX_ATTACHMENT_MAX_MB"
           step="1"
           :label="
             t(
@@ -272,7 +272,7 @@
             attachmentLimitError
               || t(
                 'nc_bitwarden',
-                'Permitted values: 1 to 1024 MiB. The default is 25 MiB.',
+                'Permitted values: 1 to 50 MiB. The default is 25 MiB.',
               )
           "
           :disabled="
@@ -470,6 +470,7 @@ import { VaultwardenApi } from '../services/api.js'
 
 import {
   DEFAULT_ATTACHMENT_MAX_MB,
+  MAX_ATTACHMENT_MAX_MB,
   loadAttachmentLimit,
   saveAttachmentLimit,
 } from '../services/attachmentLimit.js'
@@ -518,11 +519,11 @@ const attachmentLimitError = computed(() => {
   if (
     !Number.isInteger(value)
     || value < 1
-    || value > 1024
+    || value > MAX_ATTACHMENT_MAX_MB
   ) {
     return t(
       'nc_bitwarden',
-      'The attachment size must be a whole number between 1 and 1024 MiB.',
+      'The attachment size must be a whole number between 1 and 50 MiB.',
     )
   }
 

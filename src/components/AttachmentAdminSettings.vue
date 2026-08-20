@@ -14,7 +14,7 @@
         v-model="maxMb"
         type="number"
         :min="1"
-        :max="1024"
+        :max="MAX_ATTACHMENT_MAX_MB"
         :label="t(
           'nc_bitwarden',
           'Maximum size per attachment (MiB)',
@@ -26,7 +26,7 @@
         {
         t(
         'nc_bitwarden',
-        'Permitted values: 1 to 1024 MiB. The default is 25 MiB.',
+        'Permitted values: 1 to 50 MiB. The default is 25 MiB.',
         )
         }
       </p>
@@ -67,6 +67,7 @@ import NcTextField from '@nextcloud/vue/components/NcTextField'
 
 import {
   DEFAULT_ATTACHMENT_MAX_MB,
+  MAX_ATTACHMENT_MAX_MB,
   loadAttachmentLimit,
   saveAttachmentLimit,
 } from '../services/attachmentLimit.js'

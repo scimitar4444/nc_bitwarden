@@ -2,6 +2,51 @@
 
 All notable changes to Warden are documented in this file.
 
+## 2.5.2 - 2026-08-20
+
+Warden 2.5.2 makes the vault workspace adapt to the available Nextcloud app
+width, keeps navigation and search reachable in compact layouts, and aligns
+the administrator attachment limit with the enforced upload ceiling.
+
+### Added
+
+- Adaptive three-, two- and one-pane vault layouts based on the available app
+  width instead of the complete browser viewport
+- Compact navigation controls for moving between navigation, search results
+  and item details without losing the current selection
+- A mobile `Show results` action and Enter-key handling for opening filtered
+  search results from the one-pane navigation view
+- Four regression tests for proportional default column widths, persisted
+  width fitting and minimum usable widths
+
+### Changed
+
+- Default navigation and item widths now follow the available workspace width
+- Persisted user widths are reduced proportionally when necessary to preserve
+  usable space for item details
+- Column resize handles are hidden automatically in two- and one-pane layouts
+- Both administrator attachment settings now enforce and describe the shared
+  maximum of 50 MiB while retaining the 25 MiB default
+
+### Fixed
+
+- Narrow vault views no longer retain all three desktop panes and force a
+  horizontal scrollbar
+- Navigation and global search remain reachable while item details are open in
+  the two-pane layout
+- One-pane searches no longer update an invisible result list without offering
+  a visible path to the matches
+- Long item titles and subtitles retain the full row width improvements from
+  Warden 2.4 while adapting to narrow layouts
+
+### Validation
+
+- All sixteen regression tests passed
+- Localization, ESLint and the production build passed
+- Version metadata and generated responsive CSS were verified
+- The release candidate was installed and functionally verified on a live
+  Nextcloud instance
+
 ## 2.4.1 - 2026-08-18
 
 Version 2.4.1 updates transitive frontend and build dependencies with

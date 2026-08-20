@@ -116,7 +116,14 @@
         </NcNoteCard>
       </div>
 
-      <div class="bw-layout">
+      <div
+        class="bw-layout"
+        :class="{
+          'bw-layout--main-open':
+            selectedItem || showForm,
+        }"
+        :data-active-pane="compactPane"
+      >
         <!-- Linke Sidebar: Vault-Liste -->
         <aside class="bw-layout__sidebar">
           <VaultList
@@ -136,6 +143,7 @@
             @generate-password="showPasswordGenerator = true"
             @settings="showWardenSettings = true"
             @filter-change="onFilterChange"
+            @show-search-results="showItemsPane"
             @navigate="showVaultList"
             @create-folder="openFolderDialog()"
             @edit-folder="openFolderDialog($event)"
@@ -150,6 +158,17 @@
 
         <!-- Mittlere Spalte: gefilterte Einträge -->
         <section class="bw-layout__items">
+          <button
+            type="button"
+            class="bw-layout__compact-back bw-layout__compact-back--navigation"
+            @click="showNavigationPane"
+          >
+            <ChevronLeftIcon :size="20" />
+            <span>
+              {{ t('nc_bitwarden', 'Navigation and search') }}
+            </span>
+          </button>
+
           <VaultItems
             :items="visibleItems"
             :collections="collections"
@@ -186,6 +205,17 @@
 
         <!-- Rechte Spalte: Detailansicht oder Formular -->
         <main class="bw-layout__main">
+          <button
+            type="button"
+            class="bw-layout__compact-back"
+            @click="showItemsPane"
+          >
+            <ChevronLeftIcon :size="20" />
+            <span>
+              {{ t('nc_bitwarden', 'Back to items') }}
+            </span>
+          </button>
+
           <div v-if="loading" class="bw-main__loading">
             <NcLoadingIcon :size="48" />
             <p>{{ t('nc_bitwarden', 'Decrypting vault…') }}</p>
@@ -334,13 +364,14 @@
 </template>
 
 <script setup>
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { t } from '@nextcloud/l10n'
 import NcButton from '@nextcloud/vue/components/NcButton'
 import NcLoadingIcon from '@nextcloud/vue/components/NcLoadingIcon'
 import NcNoteCard from '@nextcloud/vue/components/NcNoteCard'
 import LockOutlineIcon from 'vue-material-design-icons/LockOutline.vue'
 import RefreshIcon from 'vue-material-design-icons/Refresh.vue'
+import ChevronLeftIcon from 'vue-material-design-icons/ChevronLeft.vue'
 import LoginForm from './components/LoginForm.vue'
 import VaultList from './components/VaultList.vue'
 import VaultItems from './components/VaultItems.vue'
@@ -402,6 +433,7 @@ const CIPHER_DECRYPT_CONCURRENCY = 16
 const trashMode = ref(false)
 
 const selectedItem = ref(null)
+const compactPane = ref('navigation')
 const restoreSelectedItemPending = ref(false)
 const loading = ref(false)
 const manualRefreshPending = ref(false)
@@ -420,6 +452,17 @@ const showWardenSettings = ref(false)
 const bulkActionMode = ref('')
 const bulkActionItems = ref([])
 const selectionRevision = ref(0)
+
+watch(
+  [selectedItem, showForm],
+  ([item, formVisible]) => {
+    if (item || formVisible) {
+      compactPane.value = 'main'
+    } else if (compactPane.value === 'main') {
+      compactPane.value = 'items'
+    }
+  },
+)
 
 /*
  * Persönliche Einträge werden nacheinander mit der bereits
@@ -739,6 +782,7 @@ function storeSelectedItemId(itemId) {
 
 function selectVaultItem(item) {
   selectedItem.value = item ?? null
+  compactPane.value = item ? 'main' : 'items'
   showForm.value = false
   editItem.value = null
 
@@ -1028,6 +1072,7 @@ function resetVaultState() {
     collectionId: '',
   }
   selectedItem.value = null
+  compactPane.value = 'navigation'
   showForm.value = false
   editItem.value = null
   showFolderDialog.value = false
@@ -1274,8 +1319,17 @@ function showVaultList() {
   }
 
   selectedItem.value = null
+  compactPane.value = 'items'
   showForm.value = false
   editItem.value = null
+}
+
+function showNavigationPane() {
+  compactPane.value = 'navigation'
+}
+
+function showItemsPane() {
+  compactPane.value = 'items'
 }
 
 function normalizeId(value) {
@@ -2799,43 +2853,211 @@ function openEditForm(item) {
 
 /* ── Dreispaltiges Layout ── */
 .bw-layout {
-  display:    flex;
-  flex:       1;
+  display: flex;
+  flex: 1;
   min-height: 0;
-  overflow-x: auto;
-  overflow-y: hidden;
+  overflow: hidden;
 }
 
 .bw-layout__sidebar {
-  width:         400px;
-  min-width:     400px;
-  max-width:     400px;
-  flex-shrink:   0;
-  border-right:  1px solid var(--color-border);
-  overflow:      hidden;
-  display:       flex;
+  display: flex;
+  width: clamp(280px, 24cqi, 480px);
+  min-width: 240px;
+  max-width: 720px;
+  flex-shrink: 0;
   flex-direction: column;
-  background:    var(--color-navigation-bg, var(--color-main-background-translucent));
+  overflow: hidden;
+  border-right: 1px solid var(--color-border);
+  background: var(--color-navigation-bg, var(--color-main-background-translucent));
 }
 
 .bw-layout__items {
-  width:         400px;
-  min-width:     400px;
-  max-width:     400px;
-  flex-shrink:   0;
-  overflow:      hidden;
-  border-right:  1px solid var(--color-border);
-  background:    var(--color-main-background);
+  display: flex;
+  width: clamp(320px, 30cqi, 600px);
+  min-width: 240px;
+  max-width: 720px;
+  flex-shrink: 0;
+  flex-direction: column;
+  overflow: hidden;
+  border-right: 1px solid var(--color-border);
+  background: var(--color-main-background);
+}
+
+.bw-layout__items :deep(.bw-items-panel) {
+  min-height: 0;
+  flex: 1;
+  height: auto;
 }
 
 .bw-layout__main {
-  min-width:      480px;
-  flex:           1;
-  overflow-y:     auto;
+  min-width: 360px;
+  flex: 1;
+  overflow-y: auto;
   /* Hintergrund identisch zur Sidebar – einheitliches Erscheinungsbild */
-  background:     var(--color-main-background);
-  display:        flex;
+  background: var(--color-main-background);
+  display: flex;
   flex-direction: column;
+}
+
+.bw-layout__compact-back {
+  display: none;
+  min-height: 42px;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.45rem 0.75rem;
+  border: 0;
+  border-bottom: 1px solid var(--color-border);
+  background: var(--color-main-background);
+  color: var(--color-main-text);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.bw-layout__compact-back:hover,
+.bw-layout__compact-back:focus-visible {
+  background: var(--color-background-hover);
+}
+
+@container warden (max-width: 1199px) {
+  .bw-layout__sidebar,
+  .bw-layout__items,
+  .bw-layout__main {
+    min-width: 0 !important;
+    max-width: none !important;
+  }
+
+  .bw-layout__sidebar {
+    width: clamp(280px, 34cqi, 390px) !important;
+    flex: 0 0 clamp(280px, 34cqi, 390px);
+  }
+
+  .bw-layout__items {
+    width: auto !important;
+    flex: 1 1 0;
+    border-right: 0;
+  }
+
+  .bw-layout__main {
+    display: none;
+    width: auto !important;
+  }
+
+  .bw-layout--main-open .bw-layout__sidebar {
+    display: none;
+  }
+
+  .bw-layout--main-open .bw-layout__items {
+    width: clamp(300px, 38cqi, 440px) !important;
+    flex: 0 0 clamp(300px, 38cqi, 440px);
+    border-right: 1px solid var(--color-border);
+  }
+
+  .bw-layout--main-open .bw-layout__main {
+    display: flex;
+    flex: 1 1 0;
+  }
+
+  .bw-layout--main-open:not([data-active-pane="navigation"])
+    .bw-layout__compact-back--navigation {
+    display: flex;
+  }
+
+  .bw-layout--main-open[data-active-pane="navigation"]
+    .bw-layout__sidebar {
+    display: flex;
+  }
+
+  .bw-layout--main-open[data-active-pane="navigation"]
+    .bw-layout__items {
+    width: auto !important;
+    flex: 1 1 0;
+    border-right: 0;
+  }
+
+  .bw-layout--main-open[data-active-pane="navigation"]
+    .bw-layout__main {
+    display: none;
+  }
+}
+
+@container warden (max-width: 760px) {
+  .bw-interface-mode {
+    justify-content: flex-start;
+    gap: 0.45rem;
+    padding: 0.45rem 0.6rem;
+  }
+
+  .bw-interface-mode__label {
+    margin-right: auto;
+  }
+
+  .bw-organization-notice {
+    padding: 0.5rem 0.5rem 0;
+  }
+
+  .bw-organization-notice__content {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .bw-organization-notice__actions {
+    flex-wrap: wrap;
+  }
+
+  .bw-layout__sidebar,
+  .bw-layout__items,
+  .bw-layout__main,
+  .bw-layout--main-open .bw-layout__items,
+  .bw-layout--main-open .bw-layout__main {
+    display: none;
+    width: 100% !important;
+    min-width: 0 !important;
+    max-width: none !important;
+    flex: 1 1 100%;
+    border-right: 0;
+  }
+
+  .bw-layout[data-active-pane="navigation"]
+    .bw-layout__sidebar,
+  .bw-layout[data-active-pane="items"]
+    .bw-layout__items,
+  .bw-layout[data-active-pane="main"]
+    .bw-layout__main {
+    display: flex;
+  }
+
+  .bw-layout__main {
+    overflow: hidden;
+  }
+
+  .bw-layout__main > :deep(.bw-detail) {
+    min-height: 0;
+    flex: 1;
+    height: auto;
+  }
+
+  .bw-layout__compact-back {
+    display: flex;
+  }
+}
+
+@container warden (max-width: 460px) {
+  .bw-interface-mode__refresh span {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+  }
+
+  .bw-interface-mode__refresh {
+    width: 2.4rem;
+    padding-right: 0;
+    padding-left: 0;
+    justify-content: center;
+  }
 }
 
 /* ── Leerzustand Detailspalte ── */
