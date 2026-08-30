@@ -165,222 +165,231 @@
 
     <div
       v-if="items.length > 0"
-      ref="listElement"
+      v-bind="containerProps"
       class="bw-items-panel__list"
+      role="list"
     >
       <div
-        v-for="(item, index) in items"
-        :key="item.id"
-        :data-item-id="item.id"
-        class="bw-items-panel__row"
-        :class="{
-          'bw-items-panel__row--active':
-            selectedId === item.id,
-          'bw-items-panel__row--selected':
-            isSelected(item),
-        }"
-        :draggable="
-          advancedMode
-            && !trashMode
-            && canEditItem(item)
-        "
-        @dragstart="startDrag($event, item)"
+        v-bind="wrapperProps"
+        class="bw-items-panel__list-content"
       >
-        <button
-          type="button"
-          class="bw-items-panel__item"
-          :aria-pressed="selectionMode
-            ? isSelected(item)
-            : undefined"
-          @click="handleItemClick($event, item, index)"
+        <div
+          v-for="{ data: item, index } in virtualItems"
+          :key="item.id"
+          :data-item-id="item.id"
+          class="bw-items-panel__row"
+          :class="{
+            'bw-items-panel__row--active':
+              selectedId === item.id,
+            'bw-items-panel__row--selected':
+              isSelected(item),
+          }"
+          :draggable="
+            advancedMode
+              && !trashMode
+              && canEditItem(item)
+          "
+          role="listitem"
+          :aria-posinset="index + 1"
+          :aria-setsize="items.length"
+          @dragstart="startDrag($event, item)"
         >
-          <span
-            v-if="selectionMode"
-            class="bw-items-panel__selection-icon"
-            aria-hidden="true"
+          <button
+            type="button"
+            class="bw-items-panel__item"
+            :aria-pressed="selectionMode
+              ? isSelected(item)
+              : undefined"
+            @click="handleItemClick($event, item, index)"
           >
             <span
-              class="bw-items-panel__selection-box"
-              :class="{
-                'bw-items-panel__selection-box--checked':
-                  isSelected(item),
-              }"
+              v-if="selectionMode"
+              class="bw-items-panel__selection-icon"
+              aria-hidden="true"
             >
-              <span v-if="isSelected(item)">✓</span>
+              <span
+                class="bw-items-panel__selection-box"
+                :class="{
+                  'bw-items-panel__selection-box--checked':
+                    isSelected(item),
+                }"
+              >
+                <span v-if="isSelected(item)">✓</span>
+              </span>
             </span>
-          </span>
 
-          <component
-            :is="typeIcon(item.type)"
-            :size="19"
-            class="bw-items-panel__icon"
-          />
+            <component
+              :is="typeIcon(item.type)"
+              :size="19"
+              class="bw-items-panel__icon"
+            />
 
-          <span class="bw-items-panel__content">
-            <strong :title="itemName(item)">
-              {{ itemName(item) }}
-            </strong>
+            <span class="bw-items-panel__content">
+              <strong :title="itemName(item)">
+                {{ itemName(item) }}
+              </strong>
 
-            <small
-              v-if="itemSubtitle(item)"
-              :title="itemSubtitle(item)"
-            >
-              {{ itemSubtitle(item) }}
-            </small>
-          </span>
+              <small
+                v-if="itemSubtitle(item)"
+                :title="itemSubtitle(item)"
+              >
+                {{ itemSubtitle(item) }}
+              </small>
+            </span>
 
-          <StarIcon
-            v-if="item.favorite"
-            :size="16"
-            class="bw-items-panel__favorite"
-            :title="t('nc_bitwarden', 'Favorite')"
-          />
-        </button>
+            <StarIcon
+              v-if="item.favorite"
+              :size="16"
+              class="bw-items-panel__favorite"
+              :title="t('nc_bitwarden', 'Favorite')"
+            />
+          </button>
 
-        <div
-          v-if="!selectionMode"
-          class="bw-items-panel__actions"
-        >
-          <template v-if="trashMode">
-            <button
-              v-if="canRestoreItem(item)"
-              type="button"
-              class="bw-items-panel__action"
-              :title="
-                t(
-                  'nc_bitwarden',
-                  'Restore {name}',
-                  { name: itemName(item) },
-                )
-              "
-              :aria-label="
-                t(
-                  'nc_bitwarden',
-                  'Restore {name}',
-                  { name: itemName(item) },
-                )
-              "
-              @click.stop="$emit('restore', item)"
-            >
-              <RestoreIcon :size="17" />
-            </button>
+          <div
+            v-if="!selectionMode"
+            class="bw-items-panel__actions"
+          >
+            <template v-if="trashMode">
+              <button
+                v-if="canRestoreItem(item)"
+                type="button"
+                class="bw-items-panel__action"
+                :title="
+                  t(
+                    'nc_bitwarden',
+                    'Restore {name}',
+                    { name: itemName(item) },
+                  )
+                "
+                :aria-label="
+                  t(
+                    'nc_bitwarden',
+                    'Restore {name}',
+                    { name: itemName(item) },
+                  )
+                "
+                @click.stop="$emit('restore', item)"
+              >
+                <RestoreIcon :size="17" />
+              </button>
 
-            <button
-              v-if="
-                advancedMode
-                  && canDeleteItem(item)
-              "
-              type="button"
-              class="
-                bw-items-panel__action
-                bw-items-panel__action--danger
-              "
-              :title="
-                t(
-                  'nc_bitwarden',
-                  'Permanently delete {name}',
-                  { name: itemName(item) },
-                )
-              "
-              :aria-label="
-                t(
-                  'nc_bitwarden',
-                  'Permanently delete {name}',
-                  { name: itemName(item) },
-                )
-              "
-              @click.stop="
-                $emit(
-                  'delete-permanent',
-                  item,
-                )
-              "
-            >
-              <DeleteOutlineIcon :size="17" />
-            </button>
-          </template>
+              <button
+                v-if="
+                  advancedMode
+                    && canDeleteItem(item)
+                "
+                type="button"
+                class="
+                  bw-items-panel__action
+                  bw-items-panel__action--danger
+                "
+                :title="
+                  t(
+                    'nc_bitwarden',
+                    'Permanently delete {name}',
+                    { name: itemName(item) },
+                  )
+                "
+                :aria-label="
+                  t(
+                    'nc_bitwarden',
+                    'Permanently delete {name}',
+                    { name: itemName(item) },
+                  )
+                "
+                @click.stop="
+                  $emit(
+                    'delete-permanent',
+                    item,
+                  )
+                "
+              >
+                <DeleteOutlineIcon :size="17" />
+              </button>
+            </template>
 
-          <template v-else>
-            <button
-              v-if="
-                advancedMode
-                  && canDuplicateItem(item)
-              "
-              type="button"
-              class="bw-items-panel__action"
-              :title="
-                t(
-                  'nc_bitwarden',
-                  'Duplicate {name}',
-                  { name: itemName(item) },
-                )
-              "
-              :aria-label="
-                t(
-                  'nc_bitwarden',
-                  'Duplicate {name}',
-                  { name: itemName(item) },
-                )
-              "
-              @click.stop="
-                $emit('duplicate', item)
-              "
-            >
-              <ContentCopyIcon :size="17" />
-            </button>
+            <template v-else>
+              <button
+                v-if="
+                  advancedMode
+                    && canDuplicateItem(item)
+                "
+                type="button"
+                class="bw-items-panel__action"
+                :title="
+                  t(
+                    'nc_bitwarden',
+                    'Duplicate {name}',
+                    { name: itemName(item) },
+                  )
+                "
+                :aria-label="
+                  t(
+                    'nc_bitwarden',
+                    'Duplicate {name}',
+                    { name: itemName(item) },
+                  )
+                "
+                @click.stop="
+                  $emit('duplicate', item)
+                "
+              >
+                <ContentCopyIcon :size="17" />
+              </button>
 
-            <button
-              v-if="canEditItem(item)"
-              type="button"
-              class="bw-items-panel__action"
-              :title="
-                t(
-                  'nc_bitwarden',
-                  'Edit {name}',
-                  { name: itemName(item) },
-                )
-              "
-              :aria-label="
-                t(
-                  'nc_bitwarden',
-                  'Edit {name}',
-                  { name: itemName(item) },
-                )
-              "
-              @click.stop="$emit('edit', item)"
-            >
-              <PencilOutlineIcon :size="17" />
-            </button>
+              <button
+                v-if="canEditItem(item)"
+                type="button"
+                class="bw-items-panel__action"
+                :title="
+                  t(
+                    'nc_bitwarden',
+                    'Edit {name}',
+                    { name: itemName(item) },
+                  )
+                "
+                :aria-label="
+                  t(
+                    'nc_bitwarden',
+                    'Edit {name}',
+                    { name: itemName(item) },
+                  )
+                "
+                @click.stop="$emit('edit', item)"
+              >
+                <PencilOutlineIcon :size="17" />
+              </button>
 
-            <button
-              v-if="
-                advancedMode
-                  && canDeleteItem(item)
-              "
-              type="button"
-              class="
-                bw-items-panel__action
-                bw-items-panel__action--danger
-              "
-              :title="
-                t(
-                  'nc_bitwarden',
-                  'Move {name} to trash',
-                  { name: itemName(item) },
-                )
-              "
-              :aria-label="
-                t(
-                  'nc_bitwarden',
-                  'Move {name} to trash',
-                  { name: itemName(item) },
-                )
-              "
-              @click.stop="$emit('delete', item)"
-            >
-              <DeleteOutlineIcon :size="17" />
-            </button>
-          </template>
+              <button
+                v-if="
+                  advancedMode
+                    && canDeleteItem(item)
+                "
+                type="button"
+                class="
+                  bw-items-panel__action
+                  bw-items-panel__action--danger
+                "
+                :title="
+                  t(
+                    'nc_bitwarden',
+                    'Move {name} to trash',
+                    { name: itemName(item) },
+                  )
+                "
+                :aria-label="
+                  t(
+                    'nc_bitwarden',
+                    'Move {name} to trash',
+                    { name: itemName(item) },
+                  )
+                "
+                @click.stop="$emit('delete', item)"
+              >
+                <DeleteOutlineIcon :size="17" />
+              </button>
+            </template>
+          </div>
         </div>
       </div>
     </div>
@@ -406,6 +415,7 @@
 <script setup>
 import { computed, nextTick, ref, watch } from 'vue'
 import { t } from '@nextcloud/l10n'
+import { useVirtualList } from '@vueuse/core'
 import ViewListOutlineIcon from 'vue-material-design-icons/ViewListOutline.vue'
 import StarIcon from 'vue-material-design-icons/Star.vue'
 import KeyOutlineIcon from 'vue-material-design-icons/KeyOutline.vue'
@@ -473,7 +483,21 @@ const emit = defineEmits([
   'bulk-delete-permanent',
 ])
 
-const listElement = ref(null)
+const VIRTUAL_ITEM_HEIGHT = 60
+
+const {
+  list: virtualItems,
+  containerProps,
+  wrapperProps,
+} = useVirtualList(
+  computed(() => props.items),
+  {
+    itemHeight: VIRTUAL_ITEM_HEIGHT,
+    overscan: 8,
+  },
+)
+
+const listElement = containerProps.ref
 const selectionMode = ref(false)
 const selectedIds = ref(new Set())
 const lastSelectedIndex = ref(null)
@@ -728,25 +752,27 @@ function startDrag(event, item) {
 
 async function scrollSelectedItemIntoView() {
   const selectedId = normalizeId(props.selectedId)
-
-  if (!selectedId || !listElement.value) {
-    return
-  }
+  const selectedIndex = selectedId
+    ? props.items.findIndex(item =>
+      normalizeId(item.id) === selectedId,
+    )
+    : -1
 
   await nextTick()
 
-  const selectedRow = Array.from(
-    listElement.value.querySelectorAll(
-      '.bw-items-panel__row[data-item-id]',
-    ),
-  ).find(row =>
-    normalizeId(row.dataset.itemId) === selectedId,
-  )
+  const container = listElement.value
 
-  selectedRow?.scrollIntoView({
-    block: 'center',
-    inline: 'nearest',
-  })
+  if (!container) {
+    return
+  }
+
+  const centeredOffset = selectedIndex >= 0
+    ? selectedIndex * VIRTUAL_ITEM_HEIGHT
+      - (container.clientHeight - VIRTUAL_ITEM_HEIGHT) / 2
+    : 0
+
+  container.scrollTop = Math.max(0, centeredOffset)
+  containerProps.onScroll()
 }
 
 watch(
@@ -911,20 +937,24 @@ function itemSubtitle(item) {
 }
 
 .bw-items-panel__list {
-  display: flex;
   min-height: 0;
   flex: 1;
-  flex-direction: column;
-  gap: 0.3rem;
   overflow-y: auto;
   padding: 0.5rem;
   scrollbar-gutter: stable;
 }
 
+.bw-items-panel__list-content {
+  min-width: 0;
+}
+
 .bw-items-panel__row {
   position: relative;
   display: flex;
+  height: 56px;
   align-items: center;
+  box-sizing: border-box;
+  margin-bottom: 4px;
   border: 1px solid var(--color-border);
   border-radius: var(--border-radius);
   background: var(--color-main-background);
@@ -947,6 +977,7 @@ function itemSubtitle(item) {
 
 .bw-items-panel__item {
   display: flex;
+  height: 100%;
   min-width: 0;
   flex: 1;
   align-items: center;
@@ -981,11 +1012,13 @@ function itemSubtitle(item) {
 
 .bw-items-panel__content strong {
   font-size: 0.9rem;
+  line-height: 1.25;
 }
 
 .bw-items-panel__content small {
   color: var(--color-text-maxcontrast);
   font-size: 0.75rem;
+  line-height: 1.3;
 }
 
 .bw-items-panel__favorite {
@@ -1043,7 +1076,6 @@ function itemSubtitle(item) {
 }
 
 .bw-items-panel__list {
-  gap: 0.2rem;
   padding: 0.4rem;
 }
 
