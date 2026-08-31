@@ -669,6 +669,10 @@ import {
   collectionMatchesQuery,
   normalizeCollectionSearch,
 } from '../utils/collectionSearch.js'
+import {
+  createVaultSearchIndex,
+  normalizeVaultSearch,
+} from '../utils/vaultSearch.js'
 
 const props = defineProps({
   items: {
@@ -1658,70 +1662,18 @@ function revisionTimestamp(item) {
   return Number.isNaN(timestamp) ? 0 : timestamp
 }
 
-function searchableItemText(item) {
-  const customFieldValues = (
-    item.fields
-    ?? []
-  ).flatMap(field => {
-    const values = [
-      field?.name,
-    ]
+const normalizedSearchTerm = computed(() =>
+  normalizeVaultSearch(search.value),
+)
 
-    if (
-      Number(field?.type) === 0
-      || Number(field?.type) === 2
-    ) {
-      values.push(field?.value)
-    }
-
-    return values
-  })
-
-  const values = [
-    item.name,
-    item.notes,
-    item.login?.username,
-    ...(item.login?.uris ?? []).map(uri => uri?.uri),
-    item.card?.cardholderName,
-    item.card?.brand,
-    item.identity?.title,
-    item.identity?.firstName,
-    item.identity?.middleName,
-    item.identity?.lastName,
-    item.identity?.username,
-    item.identity?.company,
-    item.identity?.email,
-    item.identity?.phone,
-    item.identity?.address1,
-    item.identity?.address2,
-    item.identity?.address3,
-    item.identity?.city,
-    item.identity?.state,
-    item.identity?.postalCode,
-    item.identity?.country,
-    item.sshKey?.publicKey,
-    item.sshKey?.keyFingerprint,
-    ...(item.attachments ?? []).map(
-      attachment => attachment?.fileName,
-    ),
-    ...customFieldValues,
-  ]
-
-  return values
-    .filter(value =>
-      value !== null
-      && value !== undefined,
-    )
-    .map(value => String(value))
-    .join('\n')
-    .toLocaleLowerCase()
-}
-
-const normalizedSearchTerm = computed(() => (
-  search.value
-    .trim()
-    .toLocaleLowerCase()
-))
+/*
+ * Decrypted item text changes only when the vault data changes. Keeping
+ * this index separate prevents rebuilding all searchable fields for every
+ * character typed into the search box.
+ */
+const searchIndex = computed(() =>
+  createVaultSearchIndex(props.items),
+)
 
 function showSearchResults() {
   if (!normalizedSearchTerm.value) {
@@ -1747,57 +1699,8 @@ function searchScopeMatches(item) {
   return true
 }
 
-const filtered = computed(() => {
-  let list = [...(props.items ?? [])]
-
-  const term = normalizedSearchTerm.value
-  const searching = term.length > 0
-
-  /*
-   * Deleted entries remain isolated in the trash. A normal
-   * global search must never surface deleted vault items merely
-   * because another folder or collection is currently selected.
-   */
-  if (selectedCategory.value === 'trash') {
-    list = list.filter(item =>
-      isDeletedItem(item),
-    )
-  } else {
-    list = list.filter(item =>
-      !isDeletedItem(item),
-    )
-  }
-
-  if (searching) {
-    /*
-     * Search is deliberately independent of navigation context.
-     * The selected folder, collection or category is retained in
-     * the sidebar, but does not restrict search results.
-     */
-    list = list.filter(item =>
-      searchScopeMatches(item),
-    )
-
-    list = list.filter(item =>
-      searchableItemText(item).includes(term),
-    )
-  } else if (selectedCollection.value !== null) {
-    list = list.filter(item =>
-      itemBelongsToCollection(item, selectedCollection.value),
-    )
-  } else if (selectedFolder.value === '__none__') {
-    list = list.filter(item =>
-      normalizeId(item.folderId) === null,
-    )
-  } else if (selectedFolder.value !== null) {
-    list = list.filter(item =>
-      normalizeId(item.folderId) === selectedFolder.value,
-    )
-  } else {
-    list = list.filter(item =>
-      categoryMatches(item, selectedCategory.value),
-    )
-  }
+const sortedItems = computed(() => {
+  const list = [...(props.items ?? [])]
 
   switch (sortMode.value) {
     case 'name-desc':
@@ -1827,6 +1730,63 @@ const filtered = computed(() => {
     default:
       return list.sort(compareName)
   }
+})
+
+const filtered = computed(() => {
+  let list = sortedItems.value
+
+  const term = normalizedSearchTerm.value
+  const searching = term.length > 0
+
+  /*
+   * Deleted entries remain isolated in the trash. A normal
+   * global search must never surface deleted vault items merely
+   * because another folder or collection is currently selected.
+   */
+  if (selectedCategory.value === 'trash') {
+    list = list.filter(item =>
+      isDeletedItem(item),
+    )
+  } else {
+    list = list.filter(item =>
+      !isDeletedItem(item),
+    )
+  }
+
+  if (searching) {
+    /*
+     * Search is deliberately independent of navigation context.
+     * The selected folder, collection or category is retained in
+     * the sidebar, but does not restrict search results.
+     */
+    list = list.filter(item =>
+      searchScopeMatches(item),
+    )
+
+    const indexedText = searchIndex.value
+
+    list = list.filter(item =>
+      indexedText.get(item)?.includes(term),
+    )
+  } else if (selectedCollection.value !== null) {
+    list = list.filter(item =>
+      itemBelongsToCollection(item, selectedCollection.value),
+    )
+  } else if (selectedFolder.value === '__none__') {
+    list = list.filter(item =>
+      normalizeId(item.folderId) === null,
+    )
+  } else if (selectedFolder.value !== null) {
+    list = list.filter(item =>
+      normalizeId(item.folderId) === selectedFolder.value,
+    )
+  } else {
+    list = list.filter(item =>
+      categoryMatches(item, selectedCategory.value),
+    )
+  }
+
+  return list
 })
 const activeFilterLabel = computed(() => {
   if (normalizedSearchTerm.value) {
