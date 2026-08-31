@@ -2,7 +2,7 @@
 
 > Native Bitwarden and Vaultwarden integration for Nextcloud
 
-![Version](https://img.shields.io/badge/Version-2.5.2-blue)
+![Version](https://img.shields.io/badge/Version-2.6.0-blue)
 ![Nextcloud](https://img.shields.io/badge/Nextcloud-31--34-0082C9?logo=nextcloud&logoColor=white)
 ![PHP](https://img.shields.io/badge/PHP-8.1+-777BB4?logo=php&logoColor=white)
 ![License](https://img.shields.io/badge/License-AGPL--3.0-green)
@@ -21,17 +21,16 @@ decrypted vault contents are not sent to Nextcloud.
 
 Warden is an independent integration and is not an official Bitwarden client.
 
-## What's new in 2.5.2
+## What's new in 2.6.0
 
-Warden 2.5.2 makes the vault workspace responsive to the available Nextcloud
-app width and keeps search and navigation reachable on compact screens.
+Warden 2.6.0 keeps global vault search responsive when short queries match
+hundreds or thousands of items.
 
-- Wide workspaces retain the resizable three-pane vault layout
-- Medium workspaces use two panes with a visible `Navigation & search` control
-- Narrow workspaces provide focused one-pane navigation, results and details
-- Mobile searches expose a result action and support the Enter key
-- Saved column widths adapt safely when the available space becomes smaller
-- Administrator attachment settings consistently enforce the 50 MiB ceiling
+- Searchable item text is prepared once per vault update
+- Sorting is cached independently of the current search term
+- Only visible result rows and a small buffer are rendered
+- Range selection, bulk selection and drag-and-drop retain full result indices
+- Active-item scrolling remains consistent when result sets change
 
 For the complete list of changes, see `CHANGELOG.md`.
 
@@ -354,7 +353,7 @@ Extract the application into the Nextcloud application directory:
 
 ```bash
 cd /var/www/html/custom_apps
-tar -xzf nc_bitwarden-2.5.2.tar.gz
+tar -xzf nc_bitwarden-2.6.0.tar.gz
 chown -R www-data:www-data nc_bitwarden
 ```
 
@@ -482,7 +481,7 @@ Example:
 
 ```bash
 docker cp \
-  nc_bitwarden-2.5.2.tar.gz \
+  nc_bitwarden-2.6.0.tar.gz \
   nextcloud-aio-nextcloud:/tmp/
 
 docker exec \
@@ -491,7 +490,7 @@ docker exec \
   sh -c '
     cd /var/www/html/custom_apps &&
     rm -rf nc_bitwarden &&
-    tar -xzf /tmp/nc_bitwarden-2.5.2.tar.gz &&
+    tar -xzf /tmp/nc_bitwarden-2.6.0.tar.gz &&
     chown -R www-data:www-data nc_bitwarden
   '
 

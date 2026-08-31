@@ -2,6 +2,42 @@
 
 All notable changes to Warden are documented in this file.
 
+## 2.6.0 - 2026-08-31
+
+Warden 2.6.0 makes global vault search remain responsive with large vaults,
+especially when short queries initially match hundreds or thousands of items.
+
+### Changed
+
+- Searchable item text is prepared once per vault update instead of being
+  rebuilt for every item after each typed character
+- Vault item sorting is cached independently of the current search term
+- Result lists render only the visible rows and a small overscan buffer instead
+  of creating every matching row in the browser at once
+- Virtualized rows retain the complete result indices used by range selection,
+  bulk selection and drag-and-drop
+- The active item remains centered when available, while result sets without an
+  active item start at the top
+
+### Fixed
+
+- The first characters of a search no longer cause a noticeable pause when a
+  large part of the vault matches
+- Large result sets no longer create hundreds or thousands of item-row
+  components simultaneously
+- Shorter result sets no longer retain an invalid scroll offset from a previous
+  larger list
+
+### Quality
+
+- Added three regression tests for search normalization, searchable metadata,
+  secret-field exclusion and prepared-index reuse
+- All nineteen regression tests passed
+- Localization, PHP syntax, release preflight, ESLint and the production build
+  passed
+- The release candidate was installed and functionally verified with a large
+  vault on a live Nextcloud instance
+
 ## 2.5.2 - 2026-08-20
 
 Warden 2.5.2 makes the vault workspace adapt to the available Nextcloud app
