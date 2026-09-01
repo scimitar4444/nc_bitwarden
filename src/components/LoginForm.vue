@@ -373,6 +373,9 @@ import {
 import {
   isExpectedAccount,
 } from '../utils/sessionExpiry.js'
+import {
+  shouldAutoStartSso,
+} from '../utils/ssoLogin.js'
 
 const props = defineProps({
   embedded: {
@@ -632,9 +635,9 @@ const primaryDisabled = computed(() => {
 onMounted(async () => {
   window.addEventListener('message', handleSsoMessage)
 
-  const handledReturn = await handleSsoReturn()
+  const ssoReturn = consumeSsoReturn()
 
-  if (handledReturn) {
+  if (ssoReturn.handledByOpener) {
     return
   }
 
@@ -699,6 +702,25 @@ onMounted(async () => {
       profileResult.reason,
     )
   }
+
+  if (ssoReturn.status) {
+    await processSsoStatus(ssoReturn.status)
+    return
+  }
+
+  if (
+    shouldAutoStartSso({
+      ssoEnabled: ssoEnabled.value,
+      classicLoginAllowed:
+        classicLoginAllowed.value,
+      hasSsoReturn: Boolean(ssoReturn.status),
+      reauthenticate: props.reauthenticate,
+    })
+  ) {
+    await startSsoLogin({
+      redirectInPlace: true,
+    })
+  }
 })
 
 onBeforeUnmount(() => {
@@ -709,12 +731,15 @@ onBeforeUnmount(() => {
   }
 })
 
-async function handleSsoReturn() {
+function consumeSsoReturn() {
   const url = new URL(window.location.href)
   const status = url.searchParams.get('sso')
 
   if (!status) {
-    return false
+    return {
+      handledByOpener: false,
+      status: '',
+    }
   }
 
   url.searchParams.delete('sso')
@@ -734,11 +759,16 @@ async function handleSsoReturn() {
     )
 
     window.close()
-    return true
+    return {
+      handledByOpener: true,
+      status,
+    }
   }
 
-  await processSsoStatus(status)
-  return false
+  return {
+    handledByOpener: false,
+    status,
+  }
 }
 
 async function handleSsoMessage(event) {
@@ -826,46 +856,64 @@ async function submitPrimary() {
   await startSsoLogin()
 }
 
-async function startSsoLogin() {
+async function startSsoLogin(options = {}) {
+  const redirectInPlace
+    = options?.redirectInPlace === true
+
   error.value = ''
-  info.value = ''
+  info.value = redirectInPlace
+    ? t(
+        'nc_bitwarden',
+        'Signing in…',
+      )
+    : ''
   masterPassword.value = ''
   confirmMasterPassword.value = ''
   masterPasswordSetupRequired.value = false
   masterPasswordPolicy.value = normalizePasswordPolicy({})
 
-  const width = 720
-  const height = 760
-  const left = Math.max(
-    0,
-    Math.round(window.screenX + (window.outerWidth - width) / 2),
-  )
-  const top = Math.max(
-    0,
-    Math.round(window.screenY + (window.outerHeight - height) / 2),
-  )
-
-  ssoPopup = window.open(
-    'about:blank',
-    'warden-sso-login',
-    [
-      'popup=yes',
-      `width=${width}`,
-      `height=${height}`,
-      `left=${left}`,
-      `top=${top}`,
-      'resizable=yes',
-      'scrollbars=yes',
-    ].join(','),
-  )
-
-  if (!ssoPopup) {
-    error.value = t(
-      'nc_bitwarden',
-      'The SSO window was blocked by the browser.',
+  if (!redirectInPlace) {
+    const width = 720
+    const height = 760
+    const left = Math.max(
+      0,
+      Math.round(
+        window.screenX
+          + (window.outerWidth - width) / 2,
+      ),
     )
-    return
+    const top = Math.max(
+      0,
+      Math.round(
+        window.screenY
+          + (window.outerHeight - height) / 2,
+      ),
+    )
+
+    ssoPopup = window.open(
+      'about:blank',
+      'warden-sso-login',
+      [
+        'popup=yes',
+        `width=${width}`,
+        `height=${height}`,
+        `left=${left}`,
+        `top=${top}`,
+        'resizable=yes',
+        'scrollbars=yes',
+      ].join(','),
+    )
+
+    if (!ssoPopup) {
+      error.value = t(
+        'nc_bitwarden',
+        'The SSO window was blocked by the browser.',
+      )
+      return
+    }
   }
+
+  loading.value = true
 
   try {
     const result = await VaultwardenApi.startSso()
@@ -880,6 +928,11 @@ async function startSsoLogin() {
           'SSO login failed. Please try again.',
         ),
       )
+    }
+
+    if (redirectInPlace) {
+      window.location.assign(authorizationUrl)
+      return
     }
 
     if (ssoPopup.closed) {
@@ -906,6 +959,8 @@ async function startSsoLogin() {
         'nc_bitwarden',
         'SSO login failed. Please try again.',
       )
+  } finally {
+    loading.value = false
   }
 }
 

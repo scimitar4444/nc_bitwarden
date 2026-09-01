@@ -19,7 +19,11 @@ import {
   isExpectedAccount,
   isProtectedWardenApiUrl,
   isWardenSessionExpiredError,
+  shouldRestartLoginAfterInitialSessionExpiry,
 } from '../src/utils/sessionExpiry.js'
+import {
+  shouldAutoStartSso,
+} from '../src/utils/ssoLogin.js'
 
 function tamperEncodedValue(value) {
   const index = value.lastIndexOf('|') + 1
@@ -266,4 +270,72 @@ test('session renewal accepts only the expected vault account', () => {
     false,
   )
   assert.equal(isExpectedAccount('', 'any@example.de'), true)
+})
+
+test('initial session expiry restarts login without opening reauthentication', () => {
+  assert.equal(
+    shouldRestartLoginAfterInitialSessionExpiry({
+      restoringSession: true,
+      isLoggedIn: true,
+      hasUserKey: true,
+    }),
+    true,
+  )
+  assert.equal(
+    shouldRestartLoginAfterInitialSessionExpiry({
+      restoringSession: false,
+      isLoggedIn: true,
+      hasUserKey: true,
+    }),
+    false,
+  )
+  assert.equal(
+    shouldRestartLoginAfterInitialSessionExpiry({
+      restoringSession: true,
+      isLoggedIn: false,
+      hasUserKey: true,
+    }),
+    false,
+  )
+  assert.equal(
+    shouldRestartLoginAfterInitialSessionExpiry({
+      restoringSession: true,
+      isLoggedIn: true,
+      hasUserKey: false,
+    }),
+    false,
+  )
+})
+
+test('SSO starts automatically only when it is the sole login method', () => {
+  assert.equal(
+    shouldAutoStartSso({
+      ssoEnabled: true,
+      classicLoginAllowed: false,
+    }),
+    true,
+  )
+  assert.equal(
+    shouldAutoStartSso({
+      ssoEnabled: true,
+      classicLoginAllowed: true,
+    }),
+    false,
+  )
+  assert.equal(
+    shouldAutoStartSso({
+      ssoEnabled: true,
+      classicLoginAllowed: false,
+      hasSsoReturn: true,
+    }),
+    false,
+  )
+  assert.equal(
+    shouldAutoStartSso({
+      ssoEnabled: true,
+      classicLoginAllowed: false,
+      reauthenticate: true,
+    }),
+    false,
+  )
 })

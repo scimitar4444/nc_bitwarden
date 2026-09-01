@@ -43,6 +43,16 @@ export function isWardenSessionExpiredError(exception) {
     && isProtectedWardenApiUrl(exception?.config?.url)
 }
 
+export function shouldRestartLoginAfterInitialSessionExpiry({
+  restoringSession = false,
+  isLoggedIn = false,
+  hasUserKey = false,
+} = {}) {
+  return restoringSession === true
+    && isLoggedIn === true
+    && hasUserKey === true
+}
+
 export function normalizeAccountEmail(value) {
   return typeof value === 'string'
     ? value.trim().toLowerCase()

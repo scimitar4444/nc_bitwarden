@@ -2,6 +2,43 @@
 
 All notable changes to Warden are documented in this file.
 
+## 2.6.2 - 2026-09-01
+
+Warden 2.6.2 streamlines SSO-only access and recovers cleanly when a complete
+Nextcloud sign-out leaves a stale tab-scoped vault key in the browser.
+
+### Changed
+
+- Warden now starts the initial SSO flow automatically when SSO is enabled and
+  classic login is disabled
+- The initial SSO flow uses the current browser tab, avoiding popup blockers,
+  while session renewal continues to use a separate window so open work stays
+  available
+- SSO callback results are processed after login settings are loaded so
+  passkey vault unlock remains available after the redirect
+
+### Fixed
+
+- Returning after a complete Nextcloud or OIDC sign-out no longer opens the
+  in-session renewal dialog for a stale browser unlock key
+- An expired server session found during initial vault restoration now clears
+  only the stale tab key and restarts the normal login flow
+- Failed SSO callbacks remain on the login screen instead of immediately
+  starting another redirect
+
+### Safety and quality
+
+- Automatic SSO is limited to SSO-only configurations and never replaces the
+  explicit renewal flow used while an unlocked vault or unsaved changes are
+  open
+- Added two regression tests for automatic SSO selection and initial-session
+  restoration
+- All twenty-three regression tests passed
+- Localization, PHP syntax, release preflight, ESLint and the production build
+  passed
+- The release candidate was installed and functionally verified on a live
+  Nextcloud instance
+
 ## 2.6.1 - 2026-09-01
 
 Warden 2.6.1 makes expired provider sessions visible and recoverable without
