@@ -20,6 +20,9 @@ import {
   isProtectedWardenApiUrl,
   isWardenSessionExpiredError,
 } from '../src/utils/sessionExpiry.js'
+import {
+  shouldAutoStartSso,
+} from '../src/utils/ssoLogin.js'
 
 function tamperEncodedValue(value) {
   const index = value.lastIndexOf('|') + 1
@@ -266,4 +269,37 @@ test('session renewal accepts only the expected vault account', () => {
     false,
   )
   assert.equal(isExpectedAccount('', 'any@example.de'), true)
+})
+
+test('SSO starts automatically only when it is the sole login method', () => {
+  assert.equal(
+    shouldAutoStartSso({
+      ssoEnabled: true,
+      classicLoginAllowed: false,
+    }),
+    true,
+  )
+  assert.equal(
+    shouldAutoStartSso({
+      ssoEnabled: true,
+      classicLoginAllowed: true,
+    }),
+    false,
+  )
+  assert.equal(
+    shouldAutoStartSso({
+      ssoEnabled: true,
+      classicLoginAllowed: false,
+      hasSsoReturn: true,
+    }),
+    false,
+  )
+  assert.equal(
+    shouldAutoStartSso({
+      ssoEnabled: true,
+      classicLoginAllowed: false,
+      reauthenticate: true,
+    }),
+    false,
+  )
 })
