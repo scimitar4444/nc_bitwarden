@@ -2,6 +2,41 @@
 
 All notable changes to Warden are documented in this file.
 
+## 2.6.1 - 2026-09-01
+
+Warden 2.6.1 makes expired provider sessions visible and recoverable without
+discarding the open vault or unsaved item changes.
+
+### Added
+
+- Central detection for expired Warden sessions across protected vault API
+  requests
+- A persistent session warning with an in-place sign-in action
+- Session renewal for SSO and classic login while the existing vault remains
+  open in the background
+- Account verification that rejects a different vault identity returned during
+  session renewal
+
+### Fixed
+
+- Saving an item after a provider session expired no longer appears to do
+  nothing
+- Unsaved item changes remain available while the user signs in again
+- Failed vault reloads caused by session expiry no longer clear the locally
+  unlocked vault state
+- Login, two-factor and logout errors are excluded from the global expiry
+  detector to prevent misleading renewal prompts
+
+### Safety and quality
+
+- Mutations are not retried automatically after renewed authentication, which
+  prevents ambiguous requests from creating duplicate changes
+- Added two regression tests for protected-request detection and renewed-account
+  validation
+- All twenty-one regression tests passed
+- Localization, PHP syntax, release preflight, ESLint and the production build
+  passed in continuous verification
+
 ## 2.6.0 - 2026-08-31
 
 Warden 2.6.0 makes global vault search remain responsive with large vaults,

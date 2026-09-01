@@ -1,7 +1,37 @@
 import axios from '@nextcloud/axios'
 import { generateUrl } from '@nextcloud/router'
+import {
+  isWardenSessionExpiredError,
+  WARDEN_SESSION_EXPIRED_EVENT,
+} from '../utils/sessionExpiry.js'
 
 const base = (path) => generateUrl(`/apps/nc_bitwarden${path}`)
+
+axios.interceptors.response.use(
+  response => response,
+  exception => {
+    if (
+      typeof window !== 'undefined'
+      && isWardenSessionExpiredError(exception)
+    ) {
+      window.dispatchEvent(
+        new CustomEvent(
+          WARDEN_SESSION_EXPIRED_EVENT,
+          {
+            detail: {
+              message:
+                exception?.response?.data?.error
+                ?? exception?.response?.data?.message
+                ?? '',
+            },
+          },
+        ),
+      )
+    }
+
+    return Promise.reject(exception)
+  },
+)
 
 export const VaultwardenApi = {
   async getSettings() { return (await axios.get(base('/settings'))).data },
