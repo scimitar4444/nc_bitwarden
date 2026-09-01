@@ -1023,6 +1023,9 @@ import NcButton from '@nextcloud/vue/components/NcButton'
 import NcTextField from '@nextcloud/vue/components/NcTextField'
 import NcPasswordField from '@nextcloud/vue/components/NcPasswordField'
 import NcCheckboxRadioSwitch from '@nextcloud/vue/components/NcCheckboxRadioSwitch'
+import {
+  isWardenSessionExpiredError,
+} from '../utils/sessionExpiry.js'
 import NcNoteCard from '@nextcloud/vue/components/NcNoteCard'
 import KeyOutlineIcon from 'vue-material-design-icons/KeyOutline.vue'
 import NoteTextOutlineIcon from 'vue-material-design-icons/NoteTextOutline.vue'
@@ -2420,6 +2423,13 @@ function isCipherRevisionConflict(exception) {
 }
 
 function itemSaveErrorMessage(exception) {
+  if (isWardenSessionExpiredError(exception)) {
+    return t(
+      'nc_bitwarden',
+      'Your Warden session has expired. Your changes are still available. Sign in again and then save once more.',
+    )
+  }
+
   if (exception?.code === OWNER_TRANSFER_UNVERIFIED) {
     return t(
       'nc_bitwarden',

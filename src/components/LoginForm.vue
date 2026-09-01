@@ -1,5 +1,10 @@
 <template>
-  <div class="bw-login">
+  <div
+    class="bw-login"
+    :class="{
+      'bw-login--embedded': embedded,
+    }"
+  >
     <div class="bw-login__card">
       <img
         src="../../img/app.svg"
@@ -8,6 +13,18 @@
       >
 
       <h2>{{ unlockTitle }}</h2>
+
+      <NcNoteCard
+        v-if="reauthenticate"
+        type="info"
+      >
+        {{
+          t(
+            'nc_bitwarden',
+            'Your open vault and unsaved changes will remain unchanged while you sign in again.',
+          )
+        }}
+      </NcNoteCard>
 
       <NcNoteCard
         v-if="error"
@@ -353,8 +370,29 @@ import {
 import {
   unlockUserKeyWithPasskey,
 } from '../services/passkeyPrf.js'
+import {
+  isExpectedAccount,
+} from '../utils/sessionExpiry.js'
 
-const emit = defineEmits(['logged-in'])
+const props = defineProps({
+  embedded: {
+    type: Boolean,
+    default: false,
+  },
+  expectedEmail: {
+    type: String,
+    default: '',
+  },
+  reauthenticate: {
+    type: Boolean,
+    default: false,
+  },
+})
+
+const emit = defineEmits([
+  'logged-in',
+  'session-restored',
+])
 
 const email = ref('')
 const masterPassword = ref('')
@@ -459,6 +497,10 @@ const providerLabel = computed(() => {
 })
 
 const unlockTitle = computed(() => {
+  if (props.reauthenticate) {
+    return t('nc_bitwarden', 'Sign in again')
+  }
+
   if (
     serverType.value === 'cloud_us'
     || serverType.value === 'cloud_eu'
@@ -932,6 +974,28 @@ async function loadSsoResult() {
       result.masterPasswordPolicy ?? {},
     )
 
+    if (props.reauthenticate) {
+      await assertReauthenticationAccount(result.email)
+
+      if (result.requiresMasterPasswordSetup === true) {
+        await clearUnexpectedSession()
+
+        throw new Error(
+          t(
+            'nc_bitwarden',
+            'The existing vault session could not be renewed. Lock Warden and sign in again.',
+          ),
+        )
+      }
+
+      pendingSsoResult.value = null
+
+      emit('session-restored', {
+        email: result.email?.trim() ?? '',
+      })
+      return
+    }
+
     if (masterPasswordSetupRequired.value) {
       confirmMasterPassword.value = ''
       info.value = t(
@@ -1318,6 +1382,21 @@ async function doClassicLogin() {
       masterKeyBuffer,
     )
 
+    if (props.reauthenticate) {
+      await assertReauthenticationAccount(normalizedEmail)
+
+      classicTwoFactorToken.value = ''
+      classicTwoFactorRequired.value = false
+      masterPassword.value = ''
+
+      emit('session-restored', {
+        email: normalizedEmail,
+        masterKey: userKey,
+        keepUnlocked: effectiveKeepUnlocked.value,
+      })
+      return
+    }
+
     classicTwoFactorToken.value = ''
     classicTwoFactorRequired.value = false
     masterPassword.value = ''
@@ -1343,6 +1422,37 @@ async function doClassicLogin() {
   } finally {
     loading.value = false
   }
+}
+
+async function clearUnexpectedSession() {
+  try {
+    await VaultwardenApi.logout()
+  } catch (exception) {
+    console.warn(
+      '[nc_bitwarden] Unexpected session could not be cleared:',
+      exception,
+    )
+  }
+}
+
+async function assertReauthenticationAccount(actualEmail) {
+  if (
+    isExpectedAccount(
+      props.expectedEmail,
+      actualEmail,
+    )
+  ) {
+    return
+  }
+
+  await clearUnexpectedSession()
+
+  throw new Error(
+    t(
+      'nc_bitwarden',
+      'A different vault account was returned. Your open vault was left unchanged. Sign in with the original account.',
+    ),
+  )
 }
 
 function normalizePasswordPolicy(policy) {
@@ -1385,6 +1495,17 @@ function normalizePasswordPolicy(policy) {
   border-radius: var(--border-radius-large);
   background: var(--color-main-background);
   box-shadow: var(--box-shadow);
+}
+
+.bw-login--embedded {
+  height: auto;
+  padding: 0;
+}
+
+.bw-login--embedded .bw-login__card {
+  max-width: none;
+  padding: 0;
+  box-shadow: none;
 }
 
 .bw-login__logo {

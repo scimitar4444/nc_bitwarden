@@ -117,6 +117,36 @@
       </div>
 
       <div
+        v-if="sessionExpired"
+        class="bw-session-expired-notice"
+      >
+        <NcNoteCard type="warning">
+          <div class="bw-session-expired-notice__content">
+            <div>
+              <strong>
+                {{ t('nc_bitwarden', 'Warden session expired') }}
+              </strong>
+              <p>
+                {{
+                  t(
+                    'nc_bitwarden',
+                    'Your open vault remains available, but changes cannot be saved until you sign in again.',
+                  )
+                }}
+              </p>
+            </div>
+
+            <NcButton
+              variant="primary"
+              @click="showSessionRenewal = true"
+            >
+              {{ t('nc_bitwarden', 'Sign in again') }}
+            </NcButton>
+          </div>
+        </NcNoteCard>
+      </div>
+
+      <div
         class="bw-layout"
         :class="{
           'bw-layout--main-open':
@@ -361,12 +391,41 @@
     @saved="onInlineNotesSaved"
     @auto-save-failed="onInlineNotesFailed"
   />
+
+  <NcDialog
+    v-if="showSessionRenewal"
+    :name="t('nc_bitwarden', 'Warden session expired')"
+    size="small"
+    :close-on-click-outside="false"
+    @closing="closeSessionRenewal"
+    @update:open="onSessionRenewalOpenChange"
+  >
+    <LoginForm
+      embedded
+      reauthenticate
+      :expected-email="sessionAccountEmail"
+      @session-restored="onSessionRestored"
+    />
+
+    <template #actions>
+      <NcButton @click="closeSessionRenewal">
+        {{ t('nc_bitwarden', 'Continue viewing') }}
+      </NcButton>
+    </template>
+  </NcDialog>
 </template>
 
 <script setup>
-import { computed, onMounted, ref, watch } from 'vue'
+import {
+  computed,
+  onBeforeUnmount,
+  onMounted,
+  ref,
+  watch,
+} from 'vue'
 import { t } from '@nextcloud/l10n'
 import NcButton from '@nextcloud/vue/components/NcButton'
+import NcDialog from '@nextcloud/vue/components/NcDialog'
 import NcLoadingIcon from '@nextcloud/vue/components/NcLoadingIcon'
 import NcNoteCard from '@nextcloud/vue/components/NcNoteCard'
 import LockOutlineIcon from 'vue-material-design-icons/LockOutline.vue'
@@ -399,6 +458,9 @@ import {
 import {
   mapSettledWithConcurrency,
 } from './utils/concurrency.js'
+import {
+  WARDEN_SESSION_EXPIRED_EVENT,
+} from './utils/sessionExpiry.js'
 
 // camelCase (Vaultwarden) → PascalCase (Bitwarden Cloud) Normalizer
 function toPascal(o) {
@@ -409,6 +471,8 @@ function toPascal(o) {
 
 const restoringSession = ref(true)
 const isLoggedIn = ref(false)
+const sessionExpired = ref(false)
+const showSessionRenewal = ref(false)
 const vaultRevision = ref(0)
 const userKey = ref(null)
 const items = ref([])
@@ -516,6 +580,9 @@ const manualRefreshTitle = computed(() => {
 })
 
 const vaultProfile = ref({})
+const sessionAccountEmail = computed(() => (
+  String(vaultProfile.value?.Email ?? '').trim()
+))
 const userPreferences = ref(
   normalizeUserPreferences(DEFAULT_USER_PREFERENCES),
 )
@@ -903,9 +970,55 @@ async function onLoggedIn({
 
   const loaded = await loadVault()
 
-  if (!loaded) {
+  if (!loaded && !sessionExpired.value) {
     clearSessionKey()
     resetVaultState()
+  }
+}
+
+function handleWardenSessionExpired() {
+  if (!isLoggedIn.value || !userKey.value) {
+    return
+  }
+
+  sessionExpired.value = true
+  showSessionRenewal.value = true
+}
+
+function closeSessionRenewal() {
+  showSessionRenewal.value = false
+}
+
+function onSessionRenewalOpenChange(open) {
+  if (!open) {
+    closeSessionRenewal()
+  }
+}
+
+async function onSessionRestored({
+  masterKey = null,
+  keepUnlocked = true,
+} = {}) {
+  if (masterKey) {
+    userKey.value = masterKey
+
+    if (keepUnlocked) {
+      saveSessionKey(masterKey)
+    } else {
+      clearSessionKey()
+    }
+  }
+
+  sessionExpired.value = false
+  showSessionRenewal.value = false
+
+  if (items.value.length === 0 && !showForm.value) {
+    const loaded = await loadVault()
+
+    if (!loaded && !sessionExpired.value) {
+      clearSessionKey()
+      resetVaultState()
+    }
   }
 }
 
@@ -1058,6 +1171,8 @@ async function loadVault() {
 function resetVaultState() {
   userKey.value = null
   isLoggedIn.value = false
+  sessionExpired.value = false
+  showSessionRenewal.value = false
   items.value = []
   folders.value = []
   collections.value = []
@@ -1111,6 +1226,11 @@ async function logout() {
 }
 
 onMounted(async () => {
+  window.addEventListener(
+    WARDEN_SESSION_EXPIRED_EVENT,
+    handleWardenSessionExpired,
+  )
+
   try {
     await loadOrganizationNoticeSettings()
     const restoredKey = restoreSessionKey()
@@ -1126,13 +1246,20 @@ onMounted(async () => {
 
     const loaded = await loadVault()
 
-    if (!loaded) {
+    if (!loaded && !sessionExpired.value) {
       clearSessionKey()
       resetVaultState()
     }
   } finally {
     restoringSession.value = false
   }
+})
+
+onBeforeUnmount(() => {
+  window.removeEventListener(
+    WARDEN_SESSION_EXPIRED_EVENT,
+    handleWardenSessionExpired,
+  )
 })
 
 function updateItemAttachments(payload) {
@@ -1174,8 +1301,11 @@ async function reloadVaultAndReset(selectedId = null) {
   const loaded = await loadVault()
 
   if (!loaded) {
-    clearSessionKey()
-    resetVaultState()
+    if (!sessionExpired.value) {
+      clearSessionKey()
+      resetVaultState()
+    }
+
     return false
   }
 
@@ -1216,7 +1346,7 @@ async function refreshVault() {
       selectedId,
     )
 
-    if (!loaded) {
+    if (!loaded && !sessionExpired.value) {
       alert(
         t(
           'nc_bitwarden',
@@ -2835,6 +2965,22 @@ function openEditForm(item) {
   gap: 0.5rem;
 }
 
+.bw-session-expired-notice {
+  padding: 0.75rem 1rem 0;
+  background: var(--color-main-background);
+}
+
+.bw-session-expired-notice__content {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.bw-session-expired-notice__content p {
+  margin: 0.35rem 0 0;
+}
+
 .bw-app {
   height: 100%;
   display: flex;
@@ -2994,6 +3140,15 @@ function openEditForm(item) {
 
   .bw-organization-notice {
     padding: 0.5rem 0.5rem 0;
+  }
+
+  .bw-session-expired-notice {
+    padding: 0.5rem 0.5rem 0;
+  }
+
+  .bw-session-expired-notice__content {
+    align-items: flex-start;
+    flex-direction: column;
   }
 
   .bw-organization-notice__content {

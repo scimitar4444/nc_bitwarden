@@ -645,7 +645,15 @@ OC.L10N.register(
     "Refresh vault": "Tresor aktualisieren",
     "Refreshing vault…": "Tresor wird aktualisiert …",
     "Finish editing before refreshing the vault.": "Schließe die Bearbeitung ab, bevor du den Tresor aktualisierst.",
-    "The vault could not be refreshed.": "Der Tresor konnte nicht aktualisiert werden."
+    "The vault could not be refreshed.": "Der Tresor konnte nicht aktualisiert werden.",
+    "A different vault account was returned. Your open vault was left unchanged. Sign in with the original account.": "Es wurde ein anderes Tresorkonto zurückgegeben. Der geöffnete Tresor blieb unverändert. Melde dich mit dem ursprünglichen Konto an.",
+    "Continue viewing": "Weiter ansehen",
+    "Sign in again": "Erneut anmelden",
+    "The existing vault session could not be renewed. Lock Warden and sign in again.": "Die bestehende Tresorsitzung konnte nicht erneuert werden. Sperre Warden und melde dich erneut an.",
+    "Warden session expired": "Warden-Sitzung abgelaufen",
+    "Your open vault and unsaved changes will remain unchanged while you sign in again.": "Der geöffnete Tresor und ungespeicherte Änderungen bleiben während der erneuten Anmeldung unverändert.",
+    "Your open vault remains available, but changes cannot be saved until you sign in again.": "Der geöffnete Tresor bleibt verfügbar, Änderungen können aber erst nach einer erneuten Anmeldung gespeichert werden.",
+    "Your Warden session has expired. Your changes are still available. Sign in again and then save once more.": "Deine Warden-Sitzung ist abgelaufen. Deine Änderungen sind weiterhin vorhanden. Melde dich erneut an und speichere danach noch einmal."
 },
     "nplurals=2; plural=(n != 1);"
 );

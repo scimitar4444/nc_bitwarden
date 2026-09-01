@@ -15,6 +15,11 @@ import {
 import {
   mapSettledWithConcurrency,
 } from '../src/utils/concurrency.js'
+import {
+  isExpectedAccount,
+  isProtectedWardenApiUrl,
+  isWardenSessionExpiredError,
+} from '../src/utils/sessionExpiry.js'
 
 function tamperEncodedValue(value) {
   const index = value.lastIndexOf('|') + 1
@@ -211,4 +216,54 @@ test('concurrency helper preserves order and limits workers', async () => {
   )
   assert.equal(result[0].value, 2)
   assert.equal(result[5].value, 12)
+})
+
+test('session expiry is detected only for protected Warden API calls', () => {
+  const expiredSync = {
+    config: {
+      url: '/index.php/apps/nc_bitwarden/api/sync',
+    },
+    response: {
+      status: 401,
+    },
+  }
+
+  assert.equal(isWardenSessionExpiredError(expiredSync), true)
+  assert.equal(
+    isProtectedWardenApiUrl(
+      '/index.php/apps/nc_bitwarden/api/ciphers/123',
+    ),
+    true,
+  )
+  assert.equal(
+    isProtectedWardenApiUrl(
+      '/index.php/apps/nc_bitwarden/api/login',
+    ),
+    false,
+  )
+  assert.equal(
+    isWardenSessionExpiredError({
+      ...expiredSync,
+      response: { status: 403 },
+    }),
+    false,
+  )
+})
+
+test('session renewal accepts only the expected vault account', () => {
+  assert.equal(
+    isExpectedAccount(
+      ' User@Example.DE ',
+      'user@example.de',
+    ),
+    true,
+  )
+  assert.equal(
+    isExpectedAccount(
+      'user@example.de',
+      'other@example.de',
+    ),
+    false,
+  )
+  assert.equal(isExpectedAccount('', 'any@example.de'), true)
 })
