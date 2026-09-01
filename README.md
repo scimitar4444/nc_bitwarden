@@ -2,7 +2,7 @@
 
 > Native Bitwarden and Vaultwarden integration for Nextcloud
 
-![Version](https://img.shields.io/badge/Version-2.6.1-blue)
+![Version](https://img.shields.io/badge/Version-2.6.2-blue)
 ![Nextcloud](https://img.shields.io/badge/Nextcloud-31--34-0082C9?logo=nextcloud&logoColor=white)
 ![PHP](https://img.shields.io/badge/PHP-8.1+-777BB4?logo=php&logoColor=white)
 ![License](https://img.shields.io/badge/License-AGPL--3.0-green)
@@ -21,16 +21,18 @@ decrypted vault contents are not sent to Nextcloud.
 
 Warden is an independent integration and is not an official Bitwarden client.
 
-## What's new in 2.6.1
+## What's new in 2.6.2
 
-Warden 2.6.1 detects expired provider sessions and lets users sign in again
-without discarding the open vault or unsaved item changes.
+Warden 2.6.2 starts SSO automatically when it is the only permitted login
+method and handles stale tab unlock state after a complete Nextcloud sign-out.
 
-- Protected vault requests report expired sessions consistently
-- A visible warning offers immediate in-place session renewal
-- SSO and classic login can restore the server session while forms stay open
-- A different vault account is rejected before work can continue
-- Saving is retried only after an explicit user action to avoid duplicates
+- SSO-only configurations continue directly to the configured identity
+  provider without an additional Warden button click
+- Initial SSO uses the current tab while renewal of an open vault still uses a
+  separate window to preserve unsaved changes
+- Stale tab-scoped unlock keys are discarded only when the initial server
+  session restoration fails
+- Passkey vault unlock remains available after the automatic SSO return
 
 For the complete list of changes, see `CHANGELOG.md`.
 
@@ -272,8 +274,9 @@ When the server reports that an SSO account does not yet have a master
 password, Warden can guide the user through the initial setup.
 
 An administrator may configure SSO-only operation to prevent use of the
-classic login form inside Warden. This does not disable classic authentication
-on the Vaultwarden server itself or in other Bitwarden-compatible clients.
+classic login form inside Warden. In this mode Warden starts the initial SSO
+flow automatically. This does not disable classic authentication on the
+Vaultwarden server itself or in other Bitwarden-compatible clients.
 
 #### Vaultwarden reverse-proxy callback bridge
 
@@ -353,7 +356,7 @@ Extract the application into the Nextcloud application directory:
 
 ```bash
 cd /var/www/html/custom_apps
-tar -xzf nc_bitwarden-2.6.1.tar.gz
+tar -xzf nc_bitwarden-2.6.2.tar.gz
 chown -R www-data:www-data nc_bitwarden
 ```
 
@@ -481,7 +484,7 @@ Example:
 
 ```bash
 docker cp \
-  nc_bitwarden-2.6.1.tar.gz \
+  nc_bitwarden-2.6.2.tar.gz \
   nextcloud-aio-nextcloud:/tmp/
 
 docker exec \
@@ -490,7 +493,7 @@ docker exec \
   sh -c '
     cd /var/www/html/custom_apps &&
     rm -rf nc_bitwarden &&
-    tar -xzf /tmp/nc_bitwarden-2.6.1.tar.gz &&
+    tar -xzf /tmp/nc_bitwarden-2.6.2.tar.gz &&
     chown -R www-data:www-data nc_bitwarden
   '
 
