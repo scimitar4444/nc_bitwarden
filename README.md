@@ -2,7 +2,7 @@
 
 > Native Bitwarden and Vaultwarden integration for Nextcloud
 
-![Version](https://img.shields.io/badge/Version-2.6.0-blue)
+![Version](https://img.shields.io/badge/Version-2.6.1-blue)
 ![Nextcloud](https://img.shields.io/badge/Nextcloud-31--34-0082C9?logo=nextcloud&logoColor=white)
 ![PHP](https://img.shields.io/badge/PHP-8.1+-777BB4?logo=php&logoColor=white)
 ![License](https://img.shields.io/badge/License-AGPL--3.0-green)
@@ -21,16 +21,16 @@ decrypted vault contents are not sent to Nextcloud.
 
 Warden is an independent integration and is not an official Bitwarden client.
 
-## What's new in 2.6.0
+## What's new in 2.6.1
 
-Warden 2.6.0 keeps global vault search responsive when short queries match
-hundreds or thousands of items.
+Warden 2.6.1 detects expired provider sessions and lets users sign in again
+without discarding the open vault or unsaved item changes.
 
-- Searchable item text is prepared once per vault update
-- Sorting is cached independently of the current search term
-- Only visible result rows and a small buffer are rendered
-- Range selection, bulk selection and drag-and-drop retain full result indices
-- Active-item scrolling remains consistent when result sets change
+- Protected vault requests report expired sessions consistently
+- A visible warning offers immediate in-place session renewal
+- SSO and classic login can restore the server session while forms stay open
+- A different vault account is rejected before work can continue
+- Saving is retried only after an explicit user action to avoid duplicates
 
 For the complete list of changes, see `CHANGELOG.md`.
 
@@ -353,7 +353,7 @@ Extract the application into the Nextcloud application directory:
 
 ```bash
 cd /var/www/html/custom_apps
-tar -xzf nc_bitwarden-2.6.0.tar.gz
+tar -xzf nc_bitwarden-2.6.1.tar.gz
 chown -R www-data:www-data nc_bitwarden
 ```
 
@@ -481,7 +481,7 @@ Example:
 
 ```bash
 docker cp \
-  nc_bitwarden-2.6.0.tar.gz \
+  nc_bitwarden-2.6.1.tar.gz \
   nextcloud-aio-nextcloud:/tmp/
 
 docker exec \
@@ -490,7 +490,7 @@ docker exec \
   sh -c '
     cd /var/www/html/custom_apps &&
     rm -rf nc_bitwarden &&
-    tar -xzf /tmp/nc_bitwarden-2.6.0.tar.gz &&
+    tar -xzf /tmp/nc_bitwarden-2.6.1.tar.gz &&
     chown -R www-data:www-data nc_bitwarden
   '
 
