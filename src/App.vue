@@ -459,6 +459,7 @@ import {
   mapSettledWithConcurrency,
 } from './utils/concurrency.js'
 import {
+  shouldRestartLoginAfterInitialSessionExpiry,
   WARDEN_SESSION_EXPIRED_EVENT,
 } from './utils/sessionExpiry.js'
 
@@ -978,6 +979,18 @@ async function onLoggedIn({
 
 function handleWardenSessionExpired() {
   if (!isLoggedIn.value || !userKey.value) {
+    return
+  }
+
+  if (
+    shouldRestartLoginAfterInitialSessionExpiry({
+      restoringSession: restoringSession.value,
+      isLoggedIn: isLoggedIn.value,
+      hasUserKey: Boolean(userKey.value),
+    })
+  ) {
+    clearSessionKey()
+    resetVaultState()
     return
   }
 
