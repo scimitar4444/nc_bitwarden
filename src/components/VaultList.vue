@@ -463,7 +463,7 @@
               paddingLeft: `${0.75 + collection.depth * 1.1}rem`,
             }"
             :title="collection.path"
-            @click="selectCollection(collection.id)"
+            @click="selectCollectionWithBranchToggle(collection)"
           >
             <span
               class="bw-collection__toggle"
@@ -1481,6 +1481,14 @@ function selectCollection(collectionId) {
 
   storeNavigationSelection()
   emit('navigate')
+}
+
+function selectCollectionWithBranchToggle(collection) {
+  selectCollection(collection.id)
+
+  if (collection.hasChildren) {
+    toggleCollection(collection)
+  }
 }
 
 function toggleSection(section) {
