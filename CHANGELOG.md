@@ -2,6 +2,60 @@
 
 All notable changes to Warden are documented in this file.
 
+## 2.7.0 - 2026-09-02
+
+Warden 2.7.0 makes frequent vault actions clearer and collection navigation
+more predictable, especially in large organization vaults.
+
+### Added
+
+- Login rows and item details now provide dedicated quick-copy actions for
+  passwords and, when available, current TOTP codes
+- Favorites can be added or removed directly from each item row using a
+  persistent star action
+- Missing intermediate collection path segments are represented by
+  navigation-only folders, so paths such as `IT/Applications/Sigma/Senso`
+  remain visually complete even when Vaultwarden returns only the leaf
+  collection
+
+### Changed
+
+- The global vault search is visually separated from the collection-name
+  filter and now explains that it searches all vault entries
+- Sorting is located in the item column where it affects the displayed result
+  list
+- Folder and collection sections use consistent expand and collapse behavior
+- Selecting a parent collection also expands or collapses its subcollections
+- Selecting an already visible item keeps the current scroll position instead
+  of moving the row to the center of the list
+- Copy, edit and delete actions retain a stable and consistent order across
+  item rows
+
+### Fixed
+
+- Selected item and collection rows retain one continuous highlight across
+  their complete width, including their action areas
+- Pointer focus and copy-success feedback no longer leave stale gray button
+  backgrounds after the pointer moves away
+- Collection hierarchy levels no longer appear to be skipped when only a
+  deeper slash-separated collection exists
+- Expanding or collapsing navigation sections no longer leaves their labels
+  looking selected
+
+### Safety and quality
+
+- Favorite updates preserve the current folder assignment, update the visible
+  state immediately and roll back safely when the provider rejects the change
+- Navigation-only collection nodes cannot be selected as storage targets,
+  edited, deleted or used for drag-and-drop
+- Added eight regression tests for quick-copy actions, virtual-list scrolling,
+  generated collection hierarchy nodes and favorite updates
+- All thirty-one regression tests passed
+- Localization, PHP syntax, coding standards, static analysis, release
+  preflight, ESLint and the production build passed
+- The release candidate was functionally verified on a live Nextcloud
+  instance
+
 ## 2.6.2 - 2026-09-01
 
 Warden 2.6.2 streamlines SSO-only access and recovers cleanly when a complete
