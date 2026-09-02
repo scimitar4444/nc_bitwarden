@@ -201,7 +201,6 @@
 
           <VaultItems
             :items="visibleItems"
-            :collections="collections"
             :title="activeFilterLabel"
             :selected-id="selectedItem?.id"
             :selection-revision="selectionRevision"
@@ -213,7 +212,6 @@
             @select="selectVaultItem"
             @edit="openEditForm"
             @delete="deleteItem"
-            @duplicate="openDuplicateForm"
             @bulk-folder="openBulkAction('folder', $event)"
             @bulk-collections="
               openBulkAction('collections', $event)
@@ -268,7 +266,6 @@
             @changed="reloadVaultAndReset($event)"
             @delete="deleteItem"
             @edit="openEditForm"
-            @duplicate="openDuplicateForm"
             @save-notes="saveInlineNotes"
             @select-related="openRelatedItem"
 
@@ -1792,32 +1789,6 @@ function canAssignCipherCollections(item) {
   )
 }
 
-function canManageCipherCollections(item) {
-  if (cipherItemIsPersonal(item)) {
-    return true
-  }
-
-  const collectionIds =
-    item?.collectionIds
-    ?? []
-
-  return collectionIds.some(collectionId =>
-    collections.value.some(collection =>
-      normalizeId(collection.id)
-        === normalizeId(collectionId)
-      && collection.manage === true,
-    ),
-  )
-}
-
-function canDuplicateCipherItem(item) {
-  return (
-    canEditCipherItem(item)
-    && canViewPasswordForCipherItem(item)
-    && canManageCipherCollections(item)
-  )
-}
-
 function canDeleteCipherItem(item) {
   return cipherItemIsPersonal(item)
     || item?.permissions?.delete === true
@@ -2573,75 +2544,6 @@ async function deleteSelectedItemsPermanently(
       ),
     )
   }
-}
-
-function cloneItemForDraft(item) {
-  const clone = typeof structuredClone === 'function'
-    ? structuredClone(item)
-    : JSON.parse(JSON.stringify(item))
-
-  /*
-   * Servergebundene und historische Metadaten dürfen nicht
-   * Bestandteil eines neuen Ciphers werden.
-   */
-  delete clone.id
-  delete clone.Id
-  delete clone.revisionDate
-  delete clone.RevisionDate
-  delete clone.creationDate
-  delete clone.CreationDate
-  delete clone.deletedDate
-  delete clone.DeletedDate
-  delete clone.passwordRevisionDate
-  delete clone.PasswordRevisionDate
-  delete clone.passwordHistory
-  delete clone.PasswordHistory
-
-  /*
-   * Attachment-IDs gehören zum ursprünglichen Cipher und
-   * können nicht einfach in einen neuen Eintrag übernommen
-   * werden. Anhänge werden daher bewusst nicht dupliziert.
-   */
-  clone.attachments = []
-  delete clone.Attachments
-
-  /*
-   * FIDO2-Credentials sind eindeutige Passkey-Datensätze.
-   * Eine Kopie derselben Credential-Daten in einem zweiten
-   * Eintrag wäre fachlich und sicherheitstechnisch falsch.
-   */
-  if (
-    clone.login
-    && typeof clone.login === 'object'
-  ) {
-    delete clone.login.fido2Credentials
-    delete clone.login.Fido2Credentials
-    delete clone.login.Fido2credentials
-    delete clone.login.passwordRevisionDate
-    delete clone.login.PasswordRevisionDate
-  }
-
-  clone.name = t(
-    'nc_bitwarden',
-    'Copy of {name}',
-    {
-      name: item.name
-        || t('nc_bitwarden', '(no name)'),
-    },
-  )
-
-  return clone
-}
-
-function openDuplicateForm(item) {
-  if (!canDuplicateCipherItem(item)) {
-    denyCipherAction('duplicate', item)
-    return
-  }
-
-  editItem.value = cloneItemForDraft(item)
-  showForm.value = true
-  selectedItem.value = null
 }
 
 async function deleteItem(item) {

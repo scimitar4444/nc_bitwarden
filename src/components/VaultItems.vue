@@ -310,31 +310,55 @@
 
             <template v-else>
               <button
+                v-if="canQuickCopyTotp(item)"
+                type="button"
+                class="bw-items-panel__action"
+                :class="{
+                  'bw-items-panel__action--copied':
+                    quickCopySucceeded(item, 'totp'),
+                }"
+                :title="quickCopyTitle(item, 'totp')"
+                :aria-label="quickCopyTitle(item, 'totp')"
+                @click.stop="copyLoginValue(item, 'totp')"
+              >
+                <CheckIcon
+                  v-if="quickCopySucceeded(item, 'totp')"
+                  :size="17"
+                />
+                <ClockOutlineIcon v-else :size="17" />
+              </button>
+
+              <button
                 v-if="
-                  advancedMode
-                    && canDuplicateItem(item)
+                  canQuickCopyPassword(item)
                 "
                 type="button"
                 class="bw-items-panel__action"
+                :class="{
+                  'bw-items-panel__action--copied':
+                    quickCopySucceeded(item, 'password'),
+                }"
                 :title="
-                  t(
-                    'nc_bitwarden',
-                    'Duplicate {name}',
-                    { name: itemName(item) },
+                  quickCopyTitle(
+                    item,
+                    'password',
                   )
                 "
                 :aria-label="
-                  t(
-                    'nc_bitwarden',
-                    'Duplicate {name}',
-                    { name: itemName(item) },
+                  quickCopyTitle(
+                    item,
+                    'password',
                   )
                 "
                 @click.stop="
-                  $emit('duplicate', item)
+                  copyLoginValue(item, 'password')
                 "
               >
-                <ContentCopyIcon :size="17" />
+                <CheckIcon
+                  v-if="quickCopySucceeded(item, 'password')"
+                  :size="17"
+                />
+                <ContentCopyIcon v-else :size="17" />
               </button>
 
               <button
@@ -409,13 +433,31 @@
         ) }}
       </span>
     </div>
+
+    <span
+      class="bw-items-panel__status"
+      aria-live="polite"
+    >{{ quickCopyMessage }}</span>
   </section>
 </template>
 
 <script setup>
-import { computed, nextTick, ref, watch } from 'vue'
+import {
+  computed,
+  nextTick,
+  onBeforeUnmount,
+  ref,
+  watch,
+} from 'vue'
 import { t } from '@nextcloud/l10n'
 import { useVirtualList } from '@vueuse/core'
+import { copySensitiveText } from '../services/clipboard.js'
+import {
+  canQuickCopyLoginValue,
+  loginQuickCopyValue,
+  LOGIN_QUICK_COPY_PASSWORD,
+  LOGIN_QUICK_COPY_TOTP,
+} from '../utils/loginQuickCopy.js'
 import ViewListOutlineIcon from 'vue-material-design-icons/ViewListOutline.vue'
 import StarIcon from 'vue-material-design-icons/Star.vue'
 import KeyOutlineIcon from 'vue-material-design-icons/KeyOutline.vue'
@@ -430,15 +472,12 @@ import LockOutlineIcon from 'vue-material-design-icons/LockOutline.vue'
 import PlusIcon from 'vue-material-design-icons/Plus.vue'
 import CloseIcon from 'vue-material-design-icons/Close.vue'
 import ContentCopyIcon from 'vue-material-design-icons/ContentCopy.vue'
+import ClockOutlineIcon from 'vue-material-design-icons/ClockOutline.vue'
+import CheckIcon from 'vue-material-design-icons/Check.vue'
 import CheckboxMultipleMarkedOutlineIcon from 'vue-material-design-icons/CheckboxMultipleMarkedOutline.vue'
 
 const props = defineProps({
   items: {
-    type: Array,
-    default: () => [],
-  },
-
-  collections: {
     type: Array,
     default: () => [],
   },
@@ -472,7 +511,6 @@ const emit = defineEmits([
   'select',
   'edit',
   'delete',
-  'duplicate',
   'bulk-folder',
   'bulk-collections',
   'bulk-delete',
@@ -501,6 +539,10 @@ const listElement = containerProps.ref
 const selectionMode = ref(false)
 const selectedIds = ref(new Set())
 const lastSelectedIndex = ref(null)
+const quickCopyAction = ref('')
+const quickCopyMessage = ref('')
+
+let quickCopyTimer = null
 
 const displayTitle = computed(() =>
   props.title || t('nc_bitwarden', 'All items'),
@@ -570,30 +612,94 @@ function canAssignCollectionsItem(item) {
   )
 }
 
-function canManageAssignedCollection(item) {
-  if (itemIsPersonal(item)) {
-    return true
-  }
-
-  const collectionIds =
-    item?.collectionIds
-    ?? []
-
-  return collectionIds.some(collectionId =>
-    props.collections.some(collection =>
-      normalizeId(collection.id)
-        === normalizeId(collectionId)
-      && collection.manage === true,
-    ),
+function canQuickCopyPassword(item) {
+  return canQuickCopyLoginValue(
+    item,
+    LOGIN_QUICK_COPY_PASSWORD,
+    canViewPasswordItem(item),
   )
 }
 
-function canDuplicateItem(item) {
-  return (
-    canEditItem(item)
-    && canViewPasswordItem(item)
-    && canManageAssignedCollection(item)
+function canQuickCopyTotp(item) {
+  return canQuickCopyLoginValue(
+    item,
+    LOGIN_QUICK_COPY_TOTP,
+    canViewPasswordItem(item),
   )
+}
+
+function quickCopyKey(item, type) {
+  return `${normalizeId(item?.id)}:${type}`
+}
+
+function quickCopySucceeded(item, type) {
+  return quickCopyAction.value === quickCopyKey(item, type)
+}
+
+function quickCopyTitle(item, type) {
+  const label = type === LOGIN_QUICK_COPY_TOTP
+    ? t('nc_bitwarden', 'TOTP')
+    : t('nc_bitwarden', 'Password')
+
+  return `${label}: ${t(
+    'nc_bitwarden',
+    'Copy to clipboard',
+  )} – ${itemName(item)}`
+}
+
+function clearQuickCopyFeedback() {
+  if (quickCopyTimer) {
+    clearTimeout(quickCopyTimer)
+    quickCopyTimer = null
+  }
+
+  quickCopyAction.value = ''
+  quickCopyMessage.value = ''
+}
+
+function showQuickCopyFeedback(item, type, copied) {
+  clearQuickCopyFeedback()
+
+  if (copied) {
+    quickCopyAction.value = quickCopyKey(item, type)
+  }
+
+  quickCopyMessage.value = copied
+    ? (
+      type === LOGIN_QUICK_COPY_TOTP
+        ? t('nc_bitwarden', 'Current code was copied.')
+        : t('nc_bitwarden', 'Password was copied.')
+    )
+    : (
+      type === LOGIN_QUICK_COPY_TOTP
+        ? t('nc_bitwarden', 'The code could not be copied.')
+        : t('nc_bitwarden', 'Password could not be copied.')
+    )
+
+  quickCopyTimer = setTimeout(() => {
+    quickCopyAction.value = ''
+    quickCopyMessage.value = ''
+    quickCopyTimer = null
+  }, 1600)
+}
+
+async function copyLoginValue(item, type) {
+  const allowed = type === LOGIN_QUICK_COPY_TOTP
+    ? canQuickCopyTotp(item)
+    : canQuickCopyPassword(item)
+
+  if (!allowed) {
+    return
+  }
+
+  try {
+    const value = await loginQuickCopyValue(item, type)
+    const copied = await copySensitiveText(value)
+
+    showQuickCopyFeedback(item, type, copied)
+  } catch {
+    showQuickCopyFeedback(item, type, false)
+  }
 }
 
 function canDeleteItem(item) {
@@ -820,6 +926,8 @@ watch(
   () => props.selectionRevision,
   resetSelection,
 )
+
+onBeforeUnmount(clearQuickCopyFeedback)
 
 function typeIcon(type) {
   return {
@@ -1052,6 +1160,20 @@ function itemSubtitle(item) {
 .bw-items-panel__action:focus-visible {
   background: var(--color-background-dark);
   color: var(--color-main-text);
+}
+
+.bw-items-panel__action--copied {
+  color: var(--color-success);
+}
+
+.bw-items-panel__status {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
 }
 
 .bw-items-panel__empty {
