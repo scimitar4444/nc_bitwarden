@@ -1126,6 +1126,24 @@ function itemSubtitle(item) {
   text-align: left;
 }
 
+/*
+ * Nextcloud formatiert native Buttons global. Da dieser Button
+ * die komplette Zeile abdeckt, würde dessen Hover-/Fokusfarbe
+ * unsere eigene Auswahl- und Hoverdarstellung überlagern.
+ */
+.bw-items-panel__item:hover,
+.bw-items-panel__item:focus,
+.bw-items-panel__item:active {
+  border-color: transparent !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+.bw-items-panel__item:focus-visible {
+  outline: 2px solid var(--color-primary-element);
+  outline-offset: -2px;
+}
+
 .bw-items-panel__icon {
   flex-shrink: 0;
   color: currentColor;
