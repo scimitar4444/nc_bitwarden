@@ -46,6 +46,37 @@
     </header>
 
     <div
+      v-if="advancedMode"
+      class="bw-items-panel__sort"
+    >
+      <SortVariantIcon :size="18" />
+      <label for="bw-items-sort">
+        {{ t('nc_bitwarden', 'Sort') }}
+      </label>
+      <select
+        id="bw-items-sort"
+        :value="sortMode"
+        @change="$emit('update:sort-mode', $event.target.value)"
+      >
+        <option value="name-asc">
+          {{ t('nc_bitwarden', 'Name A–Z') }}
+        </option>
+        <option value="name-desc">
+          {{ t('nc_bitwarden', 'Name Z–A') }}
+        </option>
+        <option value="favorites">
+          {{ t('nc_bitwarden', 'Favorites first') }}
+        </option>
+        <option value="modified-desc">
+          {{ t('nc_bitwarden', 'Recently modified') }}
+        </option>
+        <option value="modified-asc">
+          {{ t('nc_bitwarden', 'Oldest first') }}
+        </option>
+      </select>
+    </div>
+
+    <div
       v-if="advancedMode && selectionMode"
       class="bw-items-panel__bulk-bar"
     >
@@ -487,6 +518,7 @@ import ContentCopyIcon from 'vue-material-design-icons/ContentCopy.vue'
 import ClockOutlineIcon from 'vue-material-design-icons/ClockOutline.vue'
 import CheckIcon from 'vue-material-design-icons/Check.vue'
 import CheckboxMultipleMarkedOutlineIcon from 'vue-material-design-icons/CheckboxMultipleMarkedOutline.vue'
+import SortVariantIcon from 'vue-material-design-icons/SortVariant.vue'
 
 const props = defineProps({
   items: {
@@ -516,6 +548,10 @@ const props = defineProps({
     type: Boolean,
     default: false,
   },
+  sortMode: {
+    type: String,
+    default: 'name-asc',
+  },
 })
 
 const emit = defineEmits([
@@ -531,6 +567,7 @@ const emit = defineEmits([
   'delete-permanent',
   'bulk-restore',
   'bulk-delete-permanent',
+  'update:sort-mode',
 ])
 
 const VIRTUAL_ITEM_HEIGHT = 60
@@ -1083,6 +1120,32 @@ function itemSubtitle(item) {
   text-align: center;
 }
 
+.bw-items-panel__sort {
+  display: flex;
+  min-height: 42px;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.35rem 0.75rem;
+  border-bottom: 1px solid var(--color-border);
+  background: var(--color-background-hover);
+  color: var(--color-text-maxcontrast);
+}
+
+.bw-items-panel__sort label {
+  font-size: 0.78rem;
+}
+
+.bw-items-panel__sort select {
+  min-width: 0;
+  flex: 1;
+  padding: 0.3rem 0.45rem;
+  border: 1px solid var(--color-border-dark);
+  border-radius: var(--border-radius);
+  background: var(--color-main-background);
+  color: var(--color-main-text);
+}
+
 .bw-items-panel__list {
   min-height: 0;
   flex: 1;
@@ -1117,7 +1180,7 @@ function itemSubtitle(item) {
 }
 
 .bw-items-panel__row--active {
-  border-color: var(--color-primary-element);
+  border-color: var(--color-border);
   background: var(--color-primary-element-light);
   box-shadow: inset 3px 0 0 var(--color-primary-element);
 }
@@ -1151,6 +1214,12 @@ function itemSubtitle(item) {
 }
 
 .bw-items-panel__item:focus-visible {
+  outline: none !important;
+}
+
+.bw-items-panel__row:has(> .bw-items-panel__item:focus-visible):not(
+  .bw-items-panel__row--active
+):not(.bw-items-panel__row--selected) {
   outline: 2px solid var(--color-primary-element);
   outline-offset: -2px;
 }
@@ -1379,8 +1448,9 @@ function itemSubtitle(item) {
 }
 
 .bw-items-panel__row--selected {
-  border-color: var(--color-primary-element);
+  border-color: var(--color-border);
   background: var(--color-primary-element-light);
+  box-shadow: inset 3px 0 0 var(--color-primary-element);
 }
 
 /*
@@ -1392,7 +1462,7 @@ function itemSubtitle(item) {
 .bw-items-panel__row--active:focus-within,
 .bw-items-panel__row--selected:hover,
 .bw-items-panel__row--selected:focus-within {
-  border-color: var(--color-primary-element);
+  border-color: var(--color-border);
   background: var(--color-primary-element-light);
   box-shadow: inset 3px 0 0 var(--color-primary-element);
 }

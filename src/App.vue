@@ -168,6 +168,7 @@
               userPreferences.navigation_start_mode
             "
             :advanced-mode="isAdvancedMode"
+            :sort-mode="sortMode"
             @select="selectVaultItem"
             @logout="logout"
             @generate-password="showPasswordGenerator = true"
@@ -200,6 +201,7 @@
           </button>
 
           <VaultItems
+            v-model:sort-mode="sortMode"
             :items="visibleItems"
             :title="activeFilterLabel"
             :selected-id="selectedItem?.id"
@@ -479,6 +481,7 @@ const collections = ref([])
 const organizations = ref([])
 const organizationKeys = ref({})
 const visibleItems = ref([])
+const sortMode = ref('name-asc')
 const activeFilterLabel = ref(
   t('nc_bitwarden', 'All items'),
 )
@@ -590,6 +593,12 @@ const interfaceModeSaving = ref(false)
 const isAdvancedMode = computed(() => (
   userPreferences.value.interface_mode === 'advanced'
 ))
+
+watch(isAdvancedMode, advancedMode => {
+  if (!advancedMode) {
+    sortMode.value = 'name-asc'
+  }
+})
 
 const organizationNoticeLoaded = ref(false)
 let organizationNoticeLoadingPromise = null
@@ -1189,6 +1198,7 @@ function resetVaultState() {
   organizations.value = []
   organizationKeys.value = {}
   visibleItems.value = []
+  sortMode.value = 'name-asc'
   activeFilterLabel.value = t('nc_bitwarden', 'All items')
   activeCreateContext.value = {
     kind: 'category',

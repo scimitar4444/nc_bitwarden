@@ -108,33 +108,6 @@
       </button>
     </div>
 
-    <!-- Sortierung -->
-    <div
-      v-if="advancedMode"
-      class="bw-vault__sort"
-    >
-      <label for="bw-vault-sort">
-        {{ t('nc_bitwarden', 'Sort') }}
-      </label>
-      <select id="bw-vault-sort" v-model="sortMode">
-        <option value="name-asc">
-          {{ t('nc_bitwarden', 'Name A–Z') }}
-        </option>
-        <option value="name-desc">
-          {{ t('nc_bitwarden', 'Name Z–A') }}
-        </option>
-        <option value="favorites">
-          {{ t('nc_bitwarden', 'Favorites first') }}
-        </option>
-        <option value="modified-desc">
-          {{ t('nc_bitwarden', 'Recently modified') }}
-        </option>
-        <option value="modified-asc">
-          {{ t('nc_bitwarden', 'Oldest first') }}
-        </option>
-      </select>
-    </div>
-
     <div class="bw-vault__navigation">
       <!-- Kompakter Kategorienfilter -->
       <div class="bw-vault__folders bw-vault__categories">
@@ -675,6 +648,10 @@ const props = defineProps({
     type: Boolean,
     required: true,
   },
+  sortMode: {
+    type: String,
+    default: 'name-asc',
+  },
   selectedId: {
     type: String,
     default: null,
@@ -1003,7 +980,6 @@ function storeNavigationSelection() {
   }
 }
 
-const sortMode = ref('name-asc')
 const collapsedCollectionPaths = ref(new Set())
 const collectionSearch = ref('')
 const categoryMenu = ref(null)
@@ -1018,7 +994,6 @@ watch(
       return
     }
 
-    sortMode.value = 'name-asc'
     collectionSearch.value = ''
   },
   {
@@ -1708,7 +1683,7 @@ function searchScopeMatches(item) {
 const sortedItems = computed(() => {
   const list = [...(props.items ?? [])]
 
-  switch (sortMode.value) {
+  switch (props.sortMode) {
     case 'name-desc':
       return list.sort((a, b) => compareName(b, a))
 
@@ -2270,29 +2245,6 @@ watch(
   display: none;
 }
 
-.bw-vault__sort {
-  display: flex;
-  align-items: center;
-  gap: 0.6rem;
-  padding: 0 0.75rem 0.75rem;
-  border-bottom: 1px solid var(--color-border);
-}
-
-.bw-vault__sort label {
-  font-size: 0.8rem;
-  color: var(--color-text-maxcontrast);
-}
-
-.bw-vault__sort select {
-  flex: 1;
-  min-width: 0;
-  padding: 0.35rem 0.5rem;
-  border: 1px solid var(--color-border-dark);
-  border-radius: var(--border-radius);
-  background: var(--color-main-background);
-  color: var(--color-main-text);
-}
-
 .bw-vault__navigation {
   flex: 1;
   min-height: 0;
@@ -2604,8 +2556,20 @@ watch(
   flex: 1;
 }
 
-.bw-folder--main:hover {
-  background: transparent;
+.bw-folder--main:hover,
+.bw-folder--main:focus,
+.bw-folder--main:active {
+  border-color: transparent !important;
+  outline: none !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+.bw-folder-row:has(> .bw-folder--main:focus-visible):not(
+  .bw-folder-row--active
+) {
+  outline: 2px solid var(--color-primary-element);
+  outline-offset: -2px;
 }
 
 .bw-folder-row__actions {
