@@ -1354,6 +1354,31 @@ function itemSubtitle(item) {
   background: var(--color-primary-element-light);
 }
 
+/*
+ * Hover und Fokus dürfen die Auswahlfarbe nicht überstimmen.
+ * Pseudoklassen besitzen sonst eine höhere Spezifität als die
+ * einfache active/selected-Klasse und lassen die Zeile springen.
+ */
+.bw-items-panel__row--active:hover,
+.bw-items-panel__row--active:focus-within,
+.bw-items-panel__row--selected:hover,
+.bw-items-panel__row--selected:focus-within {
+  border-color: var(--color-primary-element);
+  background: var(--color-primary-element-light);
+  box-shadow: inset 3px 0 0 var(--color-primary-element);
+}
+
+.bw-items-panel__row--active:hover
+  .bw-items-panel__actions,
+.bw-items-panel__row--active:focus-within
+  .bw-items-panel__actions,
+.bw-items-panel__row--selected:hover
+  .bw-items-panel__actions,
+.bw-items-panel__row--selected:focus-within
+  .bw-items-panel__actions {
+  background: var(--color-primary-element-light);
+}
+
 .bw-items-panel__selection-icon {
   display: flex;
   flex-shrink: 0;
