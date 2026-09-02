@@ -1191,7 +1191,10 @@ function itemSubtitle(item) {
 }
 
 .bw-items-panel__action--copied {
-  color: var(--color-success);
+  color: var(
+    --color-success-text,
+    var(--color-main-text)
+  );
 }
 
 .bw-items-panel__action--pointer-triggered:not(:hover) {

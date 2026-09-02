@@ -2225,7 +2225,10 @@ onBeforeUnmount(() => {
 }
 
 .bw-detail__quick-copy-check {
-  color: var(--color-success);
+  color: var(
+    --color-success-text,
+    var(--color-main-text)
+  );
 }
 
 .bw-detail__quick-copy-action--pointer-triggered:not(:hover) {
