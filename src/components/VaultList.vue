@@ -191,6 +191,7 @@
             :title="folderSectionToggleLabel"
             :aria-label="folderSectionToggleLabel"
             @click="toggleSection('folders')"
+            @pointerup="releasePointerFocus"
           >
             <ChevronRightIcon
               v-if="collapsedSections.folders"
@@ -349,6 +350,7 @@
             :title="collectionSectionToggleLabel"
             :aria-label="collectionSectionToggleLabel"
             @click="toggleCollectionBranches"
+            @pointerup="releasePointerFocus"
           >
             <ChevronRightIcon
               v-if="allCollectionBranchesCollapsed"
@@ -1495,6 +1497,10 @@ function toggleSection(section) {
   )
 }
 
+function releasePointerFocus(event) {
+  event.currentTarget?.blur()
+}
+
 function toggleCollectionBranches() {
   const collapsing = !allCollectionBranchesCollapsed.value
   const nextSections = {
@@ -2276,11 +2282,19 @@ watch(
   color: var(--color-main-text);
   cursor: pointer;
   text-align: left;
+  box-shadow: none;
+  user-select: none;
 }
 
 .bw-vault__section-toggle:hover,
 .bw-vault__section-toggle:focus-visible {
   background: var(--color-background-hover);
+}
+
+.bw-vault__section-toggle:focus:not(:focus-visible) {
+  outline: none !important;
+  background: transparent !important;
+  box-shadow: none !important;
 }
 
 .bw-vault__section-title {
