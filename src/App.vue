@@ -206,6 +206,7 @@
             :title="activeFilterLabel"
             :selected-id="selectedItem?.id"
             :selection-revision="selectionRevision"
+            :favorite-pending-ids="favoritePendingItemIds"
 
             :trash-mode="trashMode"
 
@@ -214,6 +215,7 @@
             @select="selectVaultItem"
             @edit="openEditForm"
             @delete="deleteItem"
+            @toggle-favorite="toggleFavorite"
             @bulk-folder="openBulkAction('folder', $event)"
             @bulk-collections="
               openBulkAction('collections', $event)
@@ -458,6 +460,10 @@ import {
   mapSettledWithConcurrency,
 } from './utils/concurrency.js'
 import {
+  favoriteUpdatePayload,
+  updateFavoriteInItems,
+} from './utils/favorite.js'
+import {
   shouldRestartLoginAfterInitialSessionExpiry,
   WARDEN_SESSION_EXPIRED_EVENT,
 } from './utils/sessionExpiry.js'
@@ -517,6 +523,10 @@ const showWardenSettings = ref(false)
 const bulkActionMode = ref('')
 const bulkActionItems = ref([])
 const selectionRevision = ref(0)
+const favoritePendingIds = ref(new Set())
+const favoritePendingItemIds = computed(() =>
+  [...favoritePendingIds.value],
+)
 
 watch(
   [selectedItem, showForm],
@@ -554,6 +564,7 @@ const manualRefreshBlocked = computed(() => (
   showForm.value
   || inlineNoteSaveItem.value !== null
   || dropTransferActive.value
+  || favoritePendingIds.value.size > 0
 ))
 
 const manualRefreshTitle = computed(() => {
@@ -1216,6 +1227,7 @@ function resetVaultState() {
   editCollection.value = null
   showPasswordGenerator.value = false
   showWardenSettings.value = false
+  favoritePendingIds.value = new Set()
 
   dropTransferQueue.value = []
   dropTransferTarget.value = {
@@ -1807,6 +1819,87 @@ function canDeleteCipherItem(item) {
 function canRestoreCipherItem(item) {
   return cipherItemIsPersonal(item)
     || item?.permissions?.restore === true
+}
+
+function updateFavoriteState(itemId, favorite) {
+  items.value = updateFavoriteInItems(
+    items.value,
+    itemId,
+    favorite,
+  )
+  visibleItems.value = updateFavoriteInItems(
+    visibleItems.value,
+    itemId,
+    favorite,
+  )
+
+  if (
+    normalizeId(selectedItem.value?.id)
+      === normalizeId(itemId)
+  ) {
+    selectedItem.value = {
+      ...selectedItem.value,
+      favorite: Boolean(favorite),
+    }
+  }
+
+  if (
+    normalizeId(editItem.value?.id)
+      === normalizeId(itemId)
+  ) {
+    editItem.value = {
+      ...editItem.value,
+      favorite: Boolean(favorite),
+    }
+  }
+}
+
+async function toggleFavorite(item) {
+  const itemId = normalizeId(item?.id)
+
+  if (
+    !itemId
+    || item?.deletedDate
+    || item?.decryptionFailed === true
+    || favoritePendingIds.value.has(itemId)
+  ) {
+    return
+  }
+
+  const previousFavorite = Boolean(item.favorite)
+  const nextFavorite = !previousFavorite
+
+  favoritePendingIds.value = new Set([
+    ...favoritePendingIds.value,
+    itemId,
+  ])
+  updateFavoriteState(itemId, nextFavorite)
+
+  try {
+    await VaultwardenApi.updateCipherPartial(
+      item.id,
+      favoriteUpdatePayload(item, nextFavorite),
+    )
+  } catch (exception) {
+    updateFavoriteState(itemId, previousFavorite)
+
+    console.error(
+      '[nc_bitwarden] Favorite status could not be changed:',
+      exception,
+    )
+
+    alert(
+      exception?.response?.data?.error
+      || t(
+        'nc_bitwarden',
+        'The favorite status could not be changed.',
+      ),
+    )
+  } finally {
+    const pendingIds = new Set(favoritePendingIds.value)
+    pendingIds.delete(itemId)
+    favoritePendingIds.value = pendingIds
+  }
 }
 
 function denyCipherAction(action, item = null) {

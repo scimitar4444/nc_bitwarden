@@ -226,6 +226,33 @@
           @dragstart="startDrag($event, item)"
         >
           <button
+            v-if="!selectionMode && !trashMode"
+            type="button"
+            class="bw-items-panel__favorite-toggle"
+            :class="{
+              'bw-items-panel__favorite-toggle--active':
+                item.favorite,
+              'bw-items-panel__favorite-toggle--pending':
+                isFavoritePending(item),
+            }"
+            :disabled="
+              !canToggleFavorite(item)
+                || isFavoritePending(item)
+            "
+            :title="favoriteTitle(item)"
+            :aria-label="favoriteTitle(item)"
+            :aria-pressed="Boolean(item.favorite)"
+            :aria-busy="isFavoritePending(item)"
+            @click.stop="$emit('toggle-favorite', item)"
+          >
+            <StarIcon
+              v-if="item.favorite"
+              :size="18"
+            />
+            <StarOutlineIcon v-else :size="18" />
+          </button>
+
+          <button
             type="button"
             class="bw-items-panel__item"
             :aria-pressed="selectionMode
@@ -267,13 +294,6 @@
                 {{ itemSubtitle(item) }}
               </small>
             </span>
-
-            <StarIcon
-              v-if="item.favorite"
-              :size="16"
-              class="bw-items-panel__favorite"
-              :title="t('nc_bitwarden', 'Favorite')"
-            />
           </button>
 
           <div
@@ -503,6 +523,7 @@ import {
 } from '../utils/virtualListScroll.js'
 import ViewListOutlineIcon from 'vue-material-design-icons/ViewListOutline.vue'
 import StarIcon from 'vue-material-design-icons/Star.vue'
+import StarOutlineIcon from 'vue-material-design-icons/StarOutline.vue'
 import KeyOutlineIcon from 'vue-material-design-icons/KeyOutline.vue'
 import NoteTextOutlineIcon from 'vue-material-design-icons/NoteTextOutline.vue'
 import CreditCardOutlineIcon from 'vue-material-design-icons/CreditCardOutline.vue'
@@ -552,6 +573,10 @@ const props = defineProps({
     type: String,
     default: 'name-asc',
   },
+  favoritePendingIds: {
+    type: Array,
+    default: () => [],
+  },
 })
 
 const emit = defineEmits([
@@ -559,6 +584,7 @@ const emit = defineEmits([
   'select',
   'edit',
   'delete',
+  'toggle-favorite',
   'bulk-folder',
   'bulk-collections',
   'bulk-delete',
@@ -588,6 +614,10 @@ const listElement = containerProps.ref
 const selectionMode = ref(false)
 const selectedIds = ref(new Set())
 const lastSelectedIndex = ref(null)
+
+const favoritePendingIdSet = computed(() =>
+  new Set(props.favoritePendingIds.map(normalizeId)),
+)
 const quickCopyAction = ref('')
 const quickCopyPointerAction = ref('')
 const quickCopyMessage = ref('')
@@ -676,6 +706,20 @@ function canQuickCopyTotp(item) {
     LOGIN_QUICK_COPY_TOTP,
     canViewPasswordItem(item),
   )
+}
+
+function canToggleFavorite(item) {
+  return item?.decryptionFailed !== true
+}
+
+function isFavoritePending(item) {
+  return favoritePendingIdSet.value.has(normalizeId(item?.id))
+}
+
+function favoriteTitle(item) {
+  return item.favorite
+    ? t('nc_bitwarden', 'Remove from favorites')
+    : t('nc_bitwarden', 'Mark as favorite')
 }
 
 function quickCopyKey(item, type) {
@@ -1255,10 +1299,45 @@ function itemSubtitle(item) {
   line-height: 1.3;
 }
 
-.bw-items-panel__favorite {
+.bw-items-panel__favorite-toggle {
+  display: flex;
+  width: 32px;
+  height: 100%;
   flex-shrink: 0;
-  color: currentColor;
-  opacity: 0.7;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--color-text-maxcontrast);
+  cursor: pointer;
+}
+
+.bw-items-panel__favorite-toggle:hover,
+.bw-items-panel__favorite-toggle:focus,
+.bw-items-panel__favorite-toggle:active {
+  border-color: transparent !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  color: var(--color-main-text);
+}
+
+.bw-items-panel__favorite-toggle:focus-visible {
+  outline: 2px solid var(--color-primary-element);
+  outline-offset: -3px;
+}
+
+.bw-items-panel__favorite-toggle--active {
+  color: var(--color-warning, #b56d00);
+}
+
+.bw-items-panel__favorite-toggle:disabled {
+  cursor: default;
+  opacity: 0.5;
+}
+
+.bw-items-panel__favorite-toggle--pending:disabled {
+  cursor: progress;
 }
 
 .bw-items-panel__actions {
