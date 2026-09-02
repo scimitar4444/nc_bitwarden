@@ -467,6 +467,9 @@ import {
   LOGIN_QUICK_COPY_PASSWORD,
   LOGIN_QUICK_COPY_TOTP,
 } from '../utils/loginQuickCopy.js'
+import {
+  nearestVisibleScrollOffset,
+} from '../utils/virtualListScroll.js'
 import ViewListOutlineIcon from 'vue-material-design-icons/ViewListOutline.vue'
 import StarIcon from 'vue-material-design-icons/Star.vue'
 import KeyOutlineIcon from 'vue-material-design-icons/KeyOutline.vue'
@@ -897,12 +900,20 @@ async function scrollSelectedItemIntoView() {
     return
   }
 
-  const centeredOffset = selectedIndex >= 0
-    ? selectedIndex * VIRTUAL_ITEM_HEIGHT
-      - (container.clientHeight - VIRTUAL_ITEM_HEIGHT) / 2
+  const nextOffset = selectedIndex >= 0
+    ? nearestVisibleScrollOffset({
+      itemIndex: selectedIndex,
+      itemHeight: VIRTUAL_ITEM_HEIGHT,
+      scrollTop: container.scrollTop,
+      viewportHeight: container.clientHeight,
+    })
     : 0
 
-  container.scrollTop = Math.max(0, centeredOffset)
+  if (nextOffset === container.scrollTop) {
+    return
+  }
+
+  container.scrollTop = nextOffset
   containerProps.onScroll()
 }
 
