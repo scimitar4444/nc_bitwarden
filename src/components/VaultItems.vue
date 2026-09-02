@@ -316,6 +316,8 @@
                 :class="{
                   'bw-items-panel__action--copied':
                     quickCopySucceeded(item, 'totp'),
+                  'bw-items-panel__action--pointer-triggered':
+                    quickCopyPointerTriggered(item, 'totp'),
                 }"
                 :title="quickCopyTitle(item, 'totp')"
                 :aria-label="quickCopyTitle(item, 'totp')"
@@ -339,6 +341,11 @@
                 :class="{
                   'bw-items-panel__action--copied':
                     quickCopySucceeded(item, 'password'),
+                  'bw-items-panel__action--pointer-triggered':
+                    quickCopyPointerTriggered(
+                      item,
+                      'password',
+                    ),
                 }"
                 :title="
                   quickCopyTitle(
@@ -542,6 +549,7 @@ const selectionMode = ref(false)
 const selectedIds = ref(new Set())
 const lastSelectedIndex = ref(null)
 const quickCopyAction = ref('')
+const quickCopyPointerAction = ref('')
 const quickCopyMessage = ref('')
 
 let quickCopyTimer = null
@@ -638,6 +646,11 @@ function quickCopySucceeded(item, type) {
   return quickCopyAction.value === quickCopyKey(item, type)
 }
 
+function quickCopyPointerTriggered(item, type) {
+  return quickCopyPointerAction.value
+    === quickCopyKey(item, type)
+}
+
 function quickCopyTitle(item, type) {
   const label = type === LOGIN_QUICK_COPY_TOTP
     ? t('nc_bitwarden', 'TOTP')
@@ -695,6 +708,10 @@ async function copyLoginValue(item, type, event) {
   if (!allowed) {
     return
   }
+
+  quickCopyPointerAction.value = pointerTriggered
+    ? quickCopyKey(item, type)
+    : ''
 
   try {
     const value = await loginQuickCopyValue(item, type)
@@ -935,7 +952,10 @@ watch(
   resetSelection,
 )
 
-onBeforeUnmount(clearQuickCopyFeedback)
+onBeforeUnmount(() => {
+  clearQuickCopyFeedback()
+  quickCopyPointerAction.value = ''
+})
 
 function typeIcon(type) {
   return {
@@ -1172,6 +1192,13 @@ function itemSubtitle(item) {
 
 .bw-items-panel__action--copied {
   color: var(--color-success);
+}
+
+.bw-items-panel__action--pointer-triggered:not(:hover) {
+  border-color: transparent !important;
+  outline: none !important;
+  background: transparent !important;
+  box-shadow: none !important;
 }
 
 .bw-items-panel__status {

@@ -87,6 +87,11 @@
         <template v-else>
           <NcButton
             v-if="canQuickCopyTotp"
+            class="bw-detail__quick-copy-action"
+            :class="{
+              'bw-detail__quick-copy-action--pointer-triggered':
+                quickCopyPointerAction === 'totp',
+            }"
             :title="quickCopyTitle('totp')"
             :aria-label="quickCopyTitle('totp')"
             @click="copyLoginValue('totp', $event)"
@@ -101,6 +106,11 @@
 
           <NcButton
             v-if="canQuickCopyPassword"
+            class="bw-detail__quick-copy-action"
+            :class="{
+              'bw-detail__quick-copy-action--pointer-triggered':
+                quickCopyPointerAction === 'password',
+            }"
             :title="quickCopyTitle('password')"
             :aria-label="quickCopyTitle('password')"
             @click="copyLoginValue('password', $event)"
@@ -1206,6 +1216,7 @@ const canRestoreItem = computed(() =>
 const notesMessage = ref('')
 const notesCopied = ref(false)
 const quickCopyAction = ref('')
+const quickCopyPointerAction = ref('')
 const quickCopyMessage = ref('')
 
 const notesEditing = ref(false)
@@ -1272,6 +1283,10 @@ async function copyLoginValue(type, event) {
     return
   }
 
+  quickCopyPointerAction.value = pointerTriggered
+    ? type
+    : ''
+
   try {
     const value = await loginQuickCopyValue(
       props.item,
@@ -1296,6 +1311,11 @@ watch(
   ],
   ([itemId, notes], previous = []) => {
     const previousItemId = previous[0]
+
+    if (itemId !== previousItemId) {
+      clearQuickCopyFeedback()
+      quickCopyPointerAction.value = ''
+    }
 
     if (
       !notesEditing.value
@@ -2116,6 +2136,7 @@ async function copyNotes() {
   }
 
   clearQuickCopyFeedback()
+  quickCopyPointerAction.value = ''
 
   notesTimer = setTimeout(() => {
     notesCopied.value = false
@@ -2134,6 +2155,8 @@ onBeforeUnmount(() => {
     clearTimeout(notesTimer)
   }
 
+  clearQuickCopyFeedback()
+  quickCopyPointerAction.value = ''
   notesCopied.value = false
 })
 </script>
@@ -2203,6 +2226,13 @@ onBeforeUnmount(() => {
 
 .bw-detail__quick-copy-check {
   color: var(--color-success);
+}
+
+.bw-detail__quick-copy-action--pointer-triggered:not(:hover) {
+  border-color: transparent !important;
+  outline: none !important;
+  background: transparent !important;
+  box-shadow: none !important;
 }
 
 .bw-detail__quick-copy-status {
