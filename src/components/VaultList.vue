@@ -355,28 +355,14 @@
       <!-- Organisation-Sammlungen -->
       <div class="bw-vault__folders">
         <div class="bw-vault__section-heading">
-          <button
-            type="button"
-            class="bw-vault__section-toggle"
-            :aria-expanded="!collapsedSections.collections"
-            :title="collectionSectionToggleLabel"
-            :aria-label="collectionSectionToggleLabel"
-            @click="toggleSection('collections')"
+          <span
+            class="
+              bw-vault__section-title
+              bw-vault__section-title--static
+            "
           >
-            <ChevronRightIcon
-              v-if="collapsedSections.collections"
-              :size="17"
-            />
-
-            <ChevronDownIcon
-              v-else
-              :size="17"
-            />
-
-            <span class="bw-vault__section-title">
-              {{ t('nc_bitwarden', 'Collections') }}
-            </span>
-          </button>
+            {{ t('nc_bitwarden', 'Collections') }}
+          </span>
 
           <div class="bw-vault__section-actions">
             <details
@@ -438,7 +424,6 @@
         <div
           v-if="
             advancedMode
-              && !collapsedSections.collections
               && allCollectionRows.length > 0
           "
           class="bw-collection-search"
@@ -466,7 +451,6 @@
         <div
           v-if="
             advancedMode
-              && !collapsedSections.collections
               && collectionSearch
           "
           class="bw-collection-search__summary"
@@ -480,7 +464,6 @@
 
         <div
           v-for="collection in collectionRows"
-          v-show="!collapsedSections.collections"
           :key="collection.id"
           class="bw-folder-row"
           :class="{
@@ -1062,12 +1045,6 @@ const folderSectionToggleLabel = computed(() =>
   collapsedSections.value.folders
     ? t('nc_bitwarden', 'Expand folders section')
     : t('nc_bitwarden', 'Collapse folders section'),
-)
-
-const collectionSectionToggleLabel = computed(() =>
-  collapsedSections.value.collections
-    ? t('nc_bitwarden', 'Expand collections section')
-    : t('nc_bitwarden', 'Collapse collections section'),
 )
 
 const categories = [
