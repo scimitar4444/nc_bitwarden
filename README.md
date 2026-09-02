@@ -2,7 +2,7 @@
 
 > Native Bitwarden and Vaultwarden integration for Nextcloud
 
-![Version](https://img.shields.io/badge/Version-2.6.2-blue)
+![Version](https://img.shields.io/badge/Version-2.7.0-blue)
 ![Nextcloud](https://img.shields.io/badge/Nextcloud-31--34-0082C9?logo=nextcloud&logoColor=white)
 ![PHP](https://img.shields.io/badge/PHP-8.1+-777BB4?logo=php&logoColor=white)
 ![License](https://img.shields.io/badge/License-AGPL--3.0-green)
@@ -21,18 +21,19 @@ decrypted vault contents are not sent to Nextcloud.
 
 Warden is an independent integration and is not an official Bitwarden client.
 
-## What's new in 2.6.2
+## What's new in 2.7.0
 
-Warden 2.6.2 starts SSO automatically when it is the only permitted login
-method and handles stale tab unlock state after a complete Nextcloud sign-out.
+Warden 2.7.0 streamlines frequent vault actions and makes organization
+collection trees easier to understand.
 
-- SSO-only configurations continue directly to the configured identity
-  provider without an additional Warden button click
-- Initial SSO uses the current tab while renewal of an open vault still uses a
-  separate window to preserve unsaved changes
-- Stale tab-scoped unlock keys are discarded only when the initial server
-  session restoration fails
-- Passkey vault unlock remains available after the automatic SSO return
+- Login rows and item details provide dedicated password and TOTP quick-copy
+  actions
+- Favorites can be toggled directly from each item row
+- Missing intermediate collection path levels remain visible as safe,
+  navigation-only folders
+- Global search, collection filtering, sorting and hierarchy controls are
+  visually and behaviorally distinct
+- Selected rows and action feedback remain stable while navigating and copying
 
 For the complete list of changes, see `CHANGELOG.md`.
 
@@ -80,6 +81,7 @@ Warden supports the following Bitwarden item types:
 Login entries support:
 
 - Username and password
+- Direct password and current TOTP quick-copy actions
 - Multiple URLs
 - TOTP secrets and live codes
 - Password history
@@ -120,7 +122,7 @@ SSH keys can be displayed, edited and generated in the browser.
 - Search scopes for personal items, organization items or both vault areas
 - Search across names, usernames, URLs, notes, non-hidden custom fields,
   identity metadata, SSH public metadata and attachment names
-- Favorites
+- Favorites with a directly accessible item-row toggle
 - TOTP category
 - SSH-key category
 - Trash view
@@ -356,7 +358,7 @@ Extract the application into the Nextcloud application directory:
 
 ```bash
 cd /var/www/html/custom_apps
-tar -xzf nc_bitwarden-2.6.2.tar.gz
+tar -xzf nc_bitwarden-2.7.0.tar.gz
 chown -R www-data:www-data nc_bitwarden
 ```
 
@@ -484,7 +486,7 @@ Example:
 
 ```bash
 docker cp \
-  nc_bitwarden-2.6.2.tar.gz \
+  nc_bitwarden-2.7.0.tar.gz \
   nextcloud-aio-nextcloud:/tmp/
 
 docker exec \
@@ -493,7 +495,7 @@ docker exec \
   sh -c '
     cd /var/www/html/custom_apps &&
     rm -rf nc_bitwarden &&
-    tar -xzf /tmp/nc_bitwarden-2.6.2.tar.gz &&
+    tar -xzf /tmp/nc_bitwarden-2.7.0.tar.gz &&
     chown -R www-data:www-data nc_bitwarden
   '
 

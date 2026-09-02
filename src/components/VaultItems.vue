@@ -46,6 +46,37 @@
     </header>
 
     <div
+      v-if="advancedMode"
+      class="bw-items-panel__sort"
+    >
+      <SortVariantIcon :size="18" />
+      <label for="bw-items-sort">
+        {{ t('nc_bitwarden', 'Sort') }}
+      </label>
+      <select
+        id="bw-items-sort"
+        :value="sortMode"
+        @change="$emit('update:sort-mode', $event.target.value)"
+      >
+        <option value="name-asc">
+          {{ t('nc_bitwarden', 'Name A–Z') }}
+        </option>
+        <option value="name-desc">
+          {{ t('nc_bitwarden', 'Name Z–A') }}
+        </option>
+        <option value="favorites">
+          {{ t('nc_bitwarden', 'Favorites first') }}
+        </option>
+        <option value="modified-desc">
+          {{ t('nc_bitwarden', 'Recently modified') }}
+        </option>
+        <option value="modified-asc">
+          {{ t('nc_bitwarden', 'Oldest first') }}
+        </option>
+      </select>
+    </div>
+
+    <div
       v-if="advancedMode && selectionMode"
       class="bw-items-panel__bulk-bar"
     >
@@ -195,6 +226,33 @@
           @dragstart="startDrag($event, item)"
         >
           <button
+            v-if="!selectionMode && !trashMode"
+            type="button"
+            class="bw-items-panel__favorite-toggle"
+            :class="{
+              'bw-items-panel__favorite-toggle--active':
+                item.favorite,
+              'bw-items-panel__favorite-toggle--pending':
+                isFavoritePending(item),
+            }"
+            :disabled="
+              !canToggleFavorite(item)
+                || isFavoritePending(item)
+            "
+            :title="favoriteTitle(item)"
+            :aria-label="favoriteTitle(item)"
+            :aria-pressed="Boolean(item.favorite)"
+            :aria-busy="isFavoritePending(item)"
+            @click.stop="$emit('toggle-favorite', item)"
+          >
+            <StarIcon
+              v-if="item.favorite"
+              :size="18"
+            />
+            <StarOutlineIcon v-else :size="18" />
+          </button>
+
+          <button
             type="button"
             class="bw-items-panel__item"
             :aria-pressed="selectionMode
@@ -236,13 +294,6 @@
                 {{ itemSubtitle(item) }}
               </small>
             </span>
-
-            <StarIcon
-              v-if="item.favorite"
-              :size="16"
-              class="bw-items-panel__favorite"
-              :title="t('nc_bitwarden', 'Favorite')"
-            />
           </button>
 
           <div
@@ -310,31 +361,64 @@
 
             <template v-else>
               <button
+                v-if="canQuickCopyTotp(item)"
+                type="button"
+                class="bw-items-panel__action"
+                :class="{
+                  'bw-items-panel__action--copied':
+                    quickCopySucceeded(item, 'totp'),
+                  'bw-items-panel__action--pointer-triggered':
+                    quickCopyPointerTriggered(item, 'totp'),
+                }"
+                :title="quickCopyTitle(item, 'totp')"
+                :aria-label="quickCopyTitle(item, 'totp')"
+                @click.stop="
+                  copyLoginValue(item, 'totp', $event)
+                "
+              >
+                <CheckIcon
+                  v-if="quickCopySucceeded(item, 'totp')"
+                  :size="17"
+                />
+                <ClockOutlineIcon v-else :size="17" />
+              </button>
+
+              <button
                 v-if="
-                  advancedMode
-                    && canDuplicateItem(item)
+                  canQuickCopyPassword(item)
                 "
                 type="button"
                 class="bw-items-panel__action"
+                :class="{
+                  'bw-items-panel__action--copied':
+                    quickCopySucceeded(item, 'password'),
+                  'bw-items-panel__action--pointer-triggered':
+                    quickCopyPointerTriggered(
+                      item,
+                      'password',
+                    ),
+                }"
                 :title="
-                  t(
-                    'nc_bitwarden',
-                    'Duplicate {name}',
-                    { name: itemName(item) },
+                  quickCopyTitle(
+                    item,
+                    'password',
                   )
                 "
                 :aria-label="
-                  t(
-                    'nc_bitwarden',
-                    'Duplicate {name}',
-                    { name: itemName(item) },
+                  quickCopyTitle(
+                    item,
+                    'password',
                   )
                 "
                 @click.stop="
-                  $emit('duplicate', item)
+                  copyLoginValue(item, 'password', $event)
                 "
               >
-                <ContentCopyIcon :size="17" />
+                <CheckIcon
+                  v-if="quickCopySucceeded(item, 'password')"
+                  :size="17"
+                />
+                <ContentCopyIcon v-else :size="17" />
               </button>
 
               <button
@@ -409,15 +493,37 @@
         ) }}
       </span>
     </div>
+
+    <span
+      class="bw-items-panel__status"
+      aria-live="polite"
+    >{{ quickCopyMessage }}</span>
   </section>
 </template>
 
 <script setup>
-import { computed, nextTick, ref, watch } from 'vue'
+import {
+  computed,
+  nextTick,
+  onBeforeUnmount,
+  ref,
+  watch,
+} from 'vue'
 import { t } from '@nextcloud/l10n'
 import { useVirtualList } from '@vueuse/core'
+import { copySensitiveText } from '../services/clipboard.js'
+import {
+  canQuickCopyLoginValue,
+  loginQuickCopyValue,
+  LOGIN_QUICK_COPY_PASSWORD,
+  LOGIN_QUICK_COPY_TOTP,
+} from '../utils/loginQuickCopy.js'
+import {
+  nearestVisibleScrollOffset,
+} from '../utils/virtualListScroll.js'
 import ViewListOutlineIcon from 'vue-material-design-icons/ViewListOutline.vue'
 import StarIcon from 'vue-material-design-icons/Star.vue'
+import StarOutlineIcon from 'vue-material-design-icons/StarOutline.vue'
 import KeyOutlineIcon from 'vue-material-design-icons/KeyOutline.vue'
 import NoteTextOutlineIcon from 'vue-material-design-icons/NoteTextOutline.vue'
 import CreditCardOutlineIcon from 'vue-material-design-icons/CreditCardOutline.vue'
@@ -430,15 +536,13 @@ import LockOutlineIcon from 'vue-material-design-icons/LockOutline.vue'
 import PlusIcon from 'vue-material-design-icons/Plus.vue'
 import CloseIcon from 'vue-material-design-icons/Close.vue'
 import ContentCopyIcon from 'vue-material-design-icons/ContentCopy.vue'
+import ClockOutlineIcon from 'vue-material-design-icons/ClockOutline.vue'
+import CheckIcon from 'vue-material-design-icons/Check.vue'
 import CheckboxMultipleMarkedOutlineIcon from 'vue-material-design-icons/CheckboxMultipleMarkedOutline.vue'
+import SortVariantIcon from 'vue-material-design-icons/SortVariant.vue'
 
 const props = defineProps({
   items: {
-    type: Array,
-    default: () => [],
-  },
-
-  collections: {
     type: Array,
     default: () => [],
   },
@@ -465,6 +569,14 @@ const props = defineProps({
     type: Boolean,
     default: false,
   },
+  sortMode: {
+    type: String,
+    default: 'name-asc',
+  },
+  favoritePendingIds: {
+    type: Array,
+    default: () => [],
+  },
 })
 
 const emit = defineEmits([
@@ -472,7 +584,7 @@ const emit = defineEmits([
   'select',
   'edit',
   'delete',
-  'duplicate',
+  'toggle-favorite',
   'bulk-folder',
   'bulk-collections',
   'bulk-delete',
@@ -481,6 +593,7 @@ const emit = defineEmits([
   'delete-permanent',
   'bulk-restore',
   'bulk-delete-permanent',
+  'update:sort-mode',
 ])
 
 const VIRTUAL_ITEM_HEIGHT = 60
@@ -501,6 +614,15 @@ const listElement = containerProps.ref
 const selectionMode = ref(false)
 const selectedIds = ref(new Set())
 const lastSelectedIndex = ref(null)
+
+const favoritePendingIdSet = computed(() =>
+  new Set(props.favoritePendingIds.map(normalizeId)),
+)
+const quickCopyAction = ref('')
+const quickCopyPointerAction = ref('')
+const quickCopyMessage = ref('')
+
+let quickCopyTimer = null
 
 const displayTitle = computed(() =>
   props.title || t('nc_bitwarden', 'All items'),
@@ -570,30 +692,123 @@ function canAssignCollectionsItem(item) {
   )
 }
 
-function canManageAssignedCollection(item) {
-  if (itemIsPersonal(item)) {
-    return true
-  }
-
-  const collectionIds =
-    item?.collectionIds
-    ?? []
-
-  return collectionIds.some(collectionId =>
-    props.collections.some(collection =>
-      normalizeId(collection.id)
-        === normalizeId(collectionId)
-      && collection.manage === true,
-    ),
+function canQuickCopyPassword(item) {
+  return canQuickCopyLoginValue(
+    item,
+    LOGIN_QUICK_COPY_PASSWORD,
+    canViewPasswordItem(item),
   )
 }
 
-function canDuplicateItem(item) {
-  return (
-    canEditItem(item)
-    && canViewPasswordItem(item)
-    && canManageAssignedCollection(item)
+function canQuickCopyTotp(item) {
+  return canQuickCopyLoginValue(
+    item,
+    LOGIN_QUICK_COPY_TOTP,
+    canViewPasswordItem(item),
   )
+}
+
+function canToggleFavorite(item) {
+  return item?.decryptionFailed !== true
+}
+
+function isFavoritePending(item) {
+  return favoritePendingIdSet.value.has(normalizeId(item?.id))
+}
+
+function favoriteTitle(item) {
+  return item.favorite
+    ? t('nc_bitwarden', 'Remove from favorites')
+    : t('nc_bitwarden', 'Mark as favorite')
+}
+
+function quickCopyKey(item, type) {
+  return `${normalizeId(item?.id)}:${type}`
+}
+
+function quickCopySucceeded(item, type) {
+  return quickCopyAction.value === quickCopyKey(item, type)
+}
+
+function quickCopyPointerTriggered(item, type) {
+  return quickCopyPointerAction.value
+    === quickCopyKey(item, type)
+}
+
+function quickCopyTitle(item, type) {
+  const label = type === LOGIN_QUICK_COPY_TOTP
+    ? t('nc_bitwarden', 'TOTP')
+    : t('nc_bitwarden', 'Password')
+
+  return `${label}: ${t(
+    'nc_bitwarden',
+    'Copy to clipboard',
+  )} – ${itemName(item)}`
+}
+
+function clearQuickCopyFeedback() {
+  if (quickCopyTimer) {
+    clearTimeout(quickCopyTimer)
+    quickCopyTimer = null
+  }
+
+  quickCopyAction.value = ''
+  quickCopyMessage.value = ''
+}
+
+function showQuickCopyFeedback(item, type, copied) {
+  clearQuickCopyFeedback()
+
+  if (copied) {
+    quickCopyAction.value = quickCopyKey(item, type)
+  }
+
+  quickCopyMessage.value = copied
+    ? (
+      type === LOGIN_QUICK_COPY_TOTP
+        ? t('nc_bitwarden', 'Current code was copied.')
+        : t('nc_bitwarden', 'Password was copied.')
+    )
+    : (
+      type === LOGIN_QUICK_COPY_TOTP
+        ? t('nc_bitwarden', 'The code could not be copied.')
+        : t('nc_bitwarden', 'Password could not be copied.')
+    )
+
+  quickCopyTimer = setTimeout(() => {
+    quickCopyAction.value = ''
+    quickCopyMessage.value = ''
+    quickCopyTimer = null
+  }, 1600)
+}
+
+async function copyLoginValue(item, type, event) {
+  const actionButton = event?.currentTarget
+  const pointerTriggered = Number(event?.detail) > 0
+  const allowed = type === LOGIN_QUICK_COPY_TOTP
+    ? canQuickCopyTotp(item)
+    : canQuickCopyPassword(item)
+
+  if (!allowed) {
+    return
+  }
+
+  quickCopyPointerAction.value = pointerTriggered
+    ? quickCopyKey(item, type)
+    : ''
+
+  try {
+    const value = await loginQuickCopyValue(item, type)
+    const copied = await copySensitiveText(value)
+
+    showQuickCopyFeedback(item, type, copied)
+  } catch {
+    showQuickCopyFeedback(item, type, false)
+  } finally {
+    if (pointerTriggered) {
+      actionButton?.blur()
+    }
+  }
 }
 
 function canDeleteItem(item) {
@@ -766,12 +981,20 @@ async function scrollSelectedItemIntoView() {
     return
   }
 
-  const centeredOffset = selectedIndex >= 0
-    ? selectedIndex * VIRTUAL_ITEM_HEIGHT
-      - (container.clientHeight - VIRTUAL_ITEM_HEIGHT) / 2
+  const nextOffset = selectedIndex >= 0
+    ? nearestVisibleScrollOffset({
+      itemIndex: selectedIndex,
+      itemHeight: VIRTUAL_ITEM_HEIGHT,
+      scrollTop: container.scrollTop,
+      viewportHeight: container.clientHeight,
+    })
     : 0
 
-  container.scrollTop = Math.max(0, centeredOffset)
+  if (nextOffset === container.scrollTop) {
+    return
+  }
+
+  container.scrollTop = nextOffset
   containerProps.onScroll()
 }
 
@@ -820,6 +1043,11 @@ watch(
   () => props.selectionRevision,
   resetSelection,
 )
+
+onBeforeUnmount(() => {
+  clearQuickCopyFeedback()
+  quickCopyPointerAction.value = ''
+})
 
 function typeIcon(type) {
   return {
@@ -936,6 +1164,32 @@ function itemSubtitle(item) {
   text-align: center;
 }
 
+.bw-items-panel__sort {
+  display: flex;
+  min-height: 42px;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.35rem 0.75rem;
+  border-bottom: 1px solid var(--color-border);
+  background: var(--color-background-hover);
+  color: var(--color-text-maxcontrast);
+}
+
+.bw-items-panel__sort label {
+  font-size: 0.78rem;
+}
+
+.bw-items-panel__sort select {
+  min-width: 0;
+  flex: 1;
+  padding: 0.3rem 0.45rem;
+  border: 1px solid var(--color-border-dark);
+  border-radius: var(--border-radius);
+  background: var(--color-main-background);
+  color: var(--color-main-text);
+}
+
 .bw-items-panel__list {
   min-height: 0;
   flex: 1;
@@ -970,7 +1224,7 @@ function itemSubtitle(item) {
 }
 
 .bw-items-panel__row--active {
-  border-color: var(--color-primary-element);
+  border-color: var(--color-border);
   background: var(--color-primary-element-light);
   box-shadow: inset 3px 0 0 var(--color-primary-element);
 }
@@ -988,6 +1242,30 @@ function itemSubtitle(item) {
   color: var(--color-main-text);
   cursor: pointer;
   text-align: left;
+}
+
+/*
+ * Nextcloud formatiert native Buttons global. Da dieser Button
+ * die komplette Zeile abdeckt, würde dessen Hover-/Fokusfarbe
+ * unsere eigene Auswahl- und Hoverdarstellung überlagern.
+ */
+.bw-items-panel__item:hover,
+.bw-items-panel__item:focus,
+.bw-items-panel__item:active {
+  border-color: transparent !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+.bw-items-panel__item:focus-visible {
+  outline: none !important;
+}
+
+.bw-items-panel__row:has(> .bw-items-panel__item:focus-visible):not(
+  .bw-items-panel__row--active
+):not(.bw-items-panel__row--selected) {
+  outline: 2px solid var(--color-primary-element);
+  outline-offset: -2px;
 }
 
 .bw-items-panel__icon {
@@ -1021,10 +1299,45 @@ function itemSubtitle(item) {
   line-height: 1.3;
 }
 
-.bw-items-panel__favorite {
+.bw-items-panel__favorite-toggle {
+  display: flex;
+  width: 32px;
+  height: 100%;
   flex-shrink: 0;
-  color: currentColor;
-  opacity: 0.7;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--color-text-maxcontrast);
+  cursor: pointer;
+}
+
+.bw-items-panel__favorite-toggle:hover,
+.bw-items-panel__favorite-toggle:focus,
+.bw-items-panel__favorite-toggle:active {
+  border-color: transparent !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  color: var(--color-main-text);
+}
+
+.bw-items-panel__favorite-toggle:focus-visible {
+  outline: 2px solid var(--color-primary-element);
+  outline-offset: -3px;
+}
+
+.bw-items-panel__favorite-toggle--active {
+  color: var(--color-warning, #b56d00);
+}
+
+.bw-items-panel__favorite-toggle:disabled {
+  cursor: default;
+  opacity: 0.5;
+}
+
+.bw-items-panel__favorite-toggle--pending:disabled {
+  cursor: progress;
 }
 
 .bw-items-panel__actions {
@@ -1052,6 +1365,30 @@ function itemSubtitle(item) {
 .bw-items-panel__action:focus-visible {
   background: var(--color-background-dark);
   color: var(--color-main-text);
+}
+
+.bw-items-panel__action--copied {
+  color: var(
+    --color-success-text,
+    var(--color-main-text)
+  );
+}
+
+.bw-items-panel__action--pointer-triggered:not(:hover) {
+  border-color: transparent !important;
+  outline: none !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+.bw-items-panel__status {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
 }
 
 .bw-items-panel__empty {
@@ -1190,7 +1527,33 @@ function itemSubtitle(item) {
 }
 
 .bw-items-panel__row--selected {
-  border-color: var(--color-primary-element);
+  border-color: var(--color-border);
+  background: var(--color-primary-element-light);
+  box-shadow: inset 3px 0 0 var(--color-primary-element);
+}
+
+/*
+ * Hover und Fokus dürfen die Auswahlfarbe nicht überstimmen.
+ * Pseudoklassen besitzen sonst eine höhere Spezifität als die
+ * einfache active/selected-Klasse und lassen die Zeile springen.
+ */
+.bw-items-panel__row--active:hover,
+.bw-items-panel__row--active:focus-within,
+.bw-items-panel__row--selected:hover,
+.bw-items-panel__row--selected:focus-within {
+  border-color: var(--color-border);
+  background: var(--color-primary-element-light);
+  box-shadow: inset 3px 0 0 var(--color-primary-element);
+}
+
+.bw-items-panel__row--active:hover
+  .bw-items-panel__actions,
+.bw-items-panel__row--active:focus-within
+  .bw-items-panel__actions,
+.bw-items-panel__row--selected:hover
+  .bw-items-panel__actions,
+.bw-items-panel__row--selected:focus-within
+  .bw-items-panel__actions {
   background: var(--color-primary-element-light);
 }
 

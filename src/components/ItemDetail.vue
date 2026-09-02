@@ -86,25 +86,41 @@
 
         <template v-else>
           <NcButton
-            v-if="
-              advancedMode
-                && canDuplicateItem
-            "
-            :title="
-              t(
-                'nc_bitwarden',
-                'Duplicate item',
-              )
-            "
-            :aria-label="
-              t(
-                'nc_bitwarden',
-                'Duplicate item',
-              )
-            "
-            @click="$emit('duplicate', item)"
+            v-if="canQuickCopyTotp"
+            class="bw-detail__quick-copy-action"
+            :class="{
+              'bw-detail__quick-copy-action--pointer-triggered':
+                quickCopyPointerAction === 'totp',
+            }"
+            :title="quickCopyTitle('totp')"
+            :aria-label="quickCopyTitle('totp')"
+            @click="copyLoginValue('totp', $event)"
           >
-            <ContentCopyIcon :size="18" />
+            <CheckIcon
+              v-if="quickCopyAction === 'totp'"
+              class="bw-detail__quick-copy-check"
+              :size="18"
+            />
+            <ClockOutlineIcon v-else :size="18" />
+          </NcButton>
+
+          <NcButton
+            v-if="canQuickCopyPassword"
+            class="bw-detail__quick-copy-action"
+            :class="{
+              'bw-detail__quick-copy-action--pointer-triggered':
+                quickCopyPointerAction === 'password',
+            }"
+            :title="quickCopyTitle('password')"
+            :aria-label="quickCopyTitle('password')"
+            @click="copyLoginValue('password', $event)"
+          >
+            <CheckIcon
+              v-if="quickCopyAction === 'password'"
+              class="bw-detail__quick-copy-check"
+              :size="18"
+            />
+            <ContentCopyIcon v-else :size="18" />
           </NcButton>
 
           <NcButton
@@ -146,6 +162,11 @@
             <DeleteOutlineIcon :size="18" />
           </NcButton>
         </template>
+
+        <span
+          class="bw-detail__quick-copy-status"
+          aria-live="polite"
+        >{{ quickCopyMessage }}</span>
       </div>
     </header>
 
@@ -1069,12 +1090,20 @@ import {
 } from 'vue'
 import { t } from '@nextcloud/l10n'
 import { copySensitiveText } from '../services/clipboard.js'
+import {
+  canQuickCopyLoginValue,
+  loginQuickCopyValue,
+  LOGIN_QUICK_COPY_PASSWORD,
+  LOGIN_QUICK_COPY_TOTP,
+} from '../utils/loginQuickCopy.js'
 import NcButton from '@nextcloud/vue/components/NcButton'
 import PencilOutlineIcon from 'vue-material-design-icons/PencilOutline.vue'
 import DeleteOutlineIcon from 'vue-material-design-icons/DeleteOutline.vue'
 
 import RestoreIcon from 'vue-material-design-icons/Restore.vue'
 import ContentCopyIcon from 'vue-material-design-icons/ContentCopy.vue'
+import ClockOutlineIcon from 'vue-material-design-icons/ClockOutline.vue'
+import CheckIcon from 'vue-material-design-icons/Check.vue'
 import FieldRow from './FieldRow.vue'
 import TotpDisplay from './TotpDisplay.vue'
 import AttachmentManager from './AttachmentManager.vue'
@@ -1123,7 +1152,6 @@ const props = defineProps({
 const emit = defineEmits([
   'edit',
   'delete',
-  'duplicate',
   'changed',
   'save-notes',
   'select-related',
@@ -1146,24 +1174,6 @@ function canViewPasswordForItem(candidate) {
     || candidate?.viewPassword === true
 }
 
-function canManageAssignedCollection(candidate) {
-  if (itemIsPersonal(candidate)) {
-    return true
-  }
-
-  const collectionIds =
-    candidate?.collectionIds
-    ?? []
-
-  return collectionIds.some(collectionId =>
-    props.collections.some(collection =>
-      normalizeId(collection.id)
-        === normalizeId(collectionId)
-      && collection.manage === true,
-    ),
-  )
-}
-
 const personalItem = computed(() =>
   itemIsPersonal(props.item),
 )
@@ -1177,10 +1187,20 @@ const canViewPasswordItem = computed(() =>
   canViewPasswordForItem(props.item),
 )
 
-const canDuplicateItem = computed(() =>
-  canEditItem.value
-    && canViewPasswordItem.value
-    && canManageAssignedCollection(props.item),
+const canQuickCopyPassword = computed(() =>
+  canQuickCopyLoginValue(
+    props.item,
+    LOGIN_QUICK_COPY_PASSWORD,
+    canViewPasswordItem.value,
+  ),
+)
+
+const canQuickCopyTotp = computed(() =>
+  canQuickCopyLoginValue(
+    props.item,
+    LOGIN_QUICK_COPY_TOTP,
+    canViewPasswordItem.value,
+  ),
 )
 
 const canDeleteItem = computed(() =>
@@ -1195,6 +1215,9 @@ const canRestoreItem = computed(() =>
 
 const notesMessage = ref('')
 const notesCopied = ref(false)
+const quickCopyAction = ref('')
+const quickCopyPointerAction = ref('')
+const quickCopyMessage = ref('')
 
 const notesEditing = ref(false)
 const notesDraft = ref('')
@@ -1203,6 +1226,83 @@ const notesSaving = ref(false)
 const notesError = ref('')
 
 let inlineNotesMessageTimer = null
+let quickCopyTimer = null
+
+function quickCopyTitle(type) {
+  const label = type === LOGIN_QUICK_COPY_TOTP
+    ? t('nc_bitwarden', 'TOTP')
+    : t('nc_bitwarden', 'Password')
+
+  return `${label}: ${t(
+    'nc_bitwarden',
+    'Copy to clipboard',
+  )}`
+}
+
+function clearQuickCopyFeedback() {
+  if (quickCopyTimer) {
+    clearTimeout(quickCopyTimer)
+    quickCopyTimer = null
+  }
+
+  quickCopyAction.value = ''
+  quickCopyMessage.value = ''
+}
+
+function showQuickCopyFeedback(type, copied) {
+  clearQuickCopyFeedback()
+
+  quickCopyAction.value = copied ? type : ''
+  quickCopyMessage.value = copied
+    ? (
+      type === LOGIN_QUICK_COPY_TOTP
+        ? t('nc_bitwarden', 'Current code was copied.')
+        : t('nc_bitwarden', 'Password was copied.')
+    )
+    : (
+      type === LOGIN_QUICK_COPY_TOTP
+        ? t('nc_bitwarden', 'The code could not be copied.')
+        : t('nc_bitwarden', 'Password could not be copied.')
+    )
+
+  quickCopyTimer = setTimeout(() => {
+    quickCopyAction.value = ''
+    quickCopyMessage.value = ''
+    quickCopyTimer = null
+  }, 1600)
+}
+
+async function copyLoginValue(type, event) {
+  const actionButton = event?.currentTarget
+  const pointerTriggered = Number(event?.detail) > 0
+  const allowed = type === LOGIN_QUICK_COPY_TOTP
+    ? canQuickCopyTotp.value
+    : canQuickCopyPassword.value
+
+  if (!allowed) {
+    return
+  }
+
+  quickCopyPointerAction.value = pointerTriggered
+    ? type
+    : ''
+
+  try {
+    const value = await loginQuickCopyValue(
+      props.item,
+      type,
+    )
+    const copied = await writeClipboard(value)
+
+    showQuickCopyFeedback(type, copied)
+  } catch {
+    showQuickCopyFeedback(type, false)
+  } finally {
+    if (pointerTriggered) {
+      actionButton?.blur()
+    }
+  }
+}
 
 watch(
   () => [
@@ -1211,6 +1311,11 @@ watch(
   ],
   ([itemId, notes], previous = []) => {
     const previousItemId = previous[0]
+
+    if (itemId !== previousItemId) {
+      clearQuickCopyFeedback()
+      quickCopyPointerAction.value = ''
+    }
 
     if (
       !notesEditing.value
@@ -2030,6 +2135,9 @@ async function copyNotes() {
     clearTimeout(notesTimer)
   }
 
+  clearQuickCopyFeedback()
+  quickCopyPointerAction.value = ''
+
   notesTimer = setTimeout(() => {
     notesCopied.value = false
     notesMessage.value = ''
@@ -2047,6 +2155,8 @@ onBeforeUnmount(() => {
     clearTimeout(notesTimer)
   }
 
+  clearQuickCopyFeedback()
+  quickCopyPointerAction.value = ''
   notesCopied.value = false
 })
 </script>
@@ -2112,6 +2222,30 @@ onBeforeUnmount(() => {
   display: flex;
   flex-shrink: 0;
   gap: 0.5rem;
+}
+
+.bw-detail__quick-copy-check {
+  color: var(
+    --color-success-text,
+    var(--color-main-text)
+  );
+}
+
+.bw-detail__quick-copy-action--pointer-triggered:not(:hover) {
+  border-color: transparent !important;
+  outline: none !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+.bw-detail__quick-copy-status {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
 }
 
 .bw-detail__content {

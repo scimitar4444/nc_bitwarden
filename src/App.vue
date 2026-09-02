@@ -168,6 +168,7 @@
               userPreferences.navigation_start_mode
             "
             :advanced-mode="isAdvancedMode"
+            :sort-mode="sortMode"
             @select="selectVaultItem"
             @logout="logout"
             @generate-password="showPasswordGenerator = true"
@@ -200,11 +201,12 @@
           </button>
 
           <VaultItems
+            v-model:sort-mode="sortMode"
             :items="visibleItems"
-            :collections="collections"
             :title="activeFilterLabel"
             :selected-id="selectedItem?.id"
             :selection-revision="selectionRevision"
+            :favorite-pending-ids="favoritePendingItemIds"
 
             :trash-mode="trashMode"
 
@@ -213,7 +215,7 @@
             @select="selectVaultItem"
             @edit="openEditForm"
             @delete="deleteItem"
-            @duplicate="openDuplicateForm"
+            @toggle-favorite="toggleFavorite"
             @bulk-folder="openBulkAction('folder', $event)"
             @bulk-collections="
               openBulkAction('collections', $event)
@@ -268,7 +270,6 @@
             @changed="reloadVaultAndReset($event)"
             @delete="deleteItem"
             @edit="openEditForm"
-            @duplicate="openDuplicateForm"
             @save-notes="saveInlineNotes"
             @select-related="openRelatedItem"
 
@@ -459,6 +460,10 @@ import {
   mapSettledWithConcurrency,
 } from './utils/concurrency.js'
 import {
+  favoriteUpdatePayload,
+  updateFavoriteInItems,
+} from './utils/favorite.js'
+import {
   shouldRestartLoginAfterInitialSessionExpiry,
   WARDEN_SESSION_EXPIRED_EVENT,
 } from './utils/sessionExpiry.js'
@@ -482,6 +487,7 @@ const collections = ref([])
 const organizations = ref([])
 const organizationKeys = ref({})
 const visibleItems = ref([])
+const sortMode = ref('name-asc')
 const activeFilterLabel = ref(
   t('nc_bitwarden', 'All items'),
 )
@@ -517,6 +523,10 @@ const showWardenSettings = ref(false)
 const bulkActionMode = ref('')
 const bulkActionItems = ref([])
 const selectionRevision = ref(0)
+const favoritePendingIds = ref(new Set())
+const favoritePendingItemIds = computed(() =>
+  [...favoritePendingIds.value],
+)
 
 watch(
   [selectedItem, showForm],
@@ -554,6 +564,7 @@ const manualRefreshBlocked = computed(() => (
   showForm.value
   || inlineNoteSaveItem.value !== null
   || dropTransferActive.value
+  || favoritePendingIds.value.size > 0
 ))
 
 const manualRefreshTitle = computed(() => {
@@ -593,6 +604,12 @@ const interfaceModeSaving = ref(false)
 const isAdvancedMode = computed(() => (
   userPreferences.value.interface_mode === 'advanced'
 ))
+
+watch(isAdvancedMode, advancedMode => {
+  if (!advancedMode) {
+    sortMode.value = 'name-asc'
+  }
+})
 
 const organizationNoticeLoaded = ref(false)
 let organizationNoticeLoadingPromise = null
@@ -1192,6 +1209,7 @@ function resetVaultState() {
   organizations.value = []
   organizationKeys.value = {}
   visibleItems.value = []
+  sortMode.value = 'name-asc'
   activeFilterLabel.value = t('nc_bitwarden', 'All items')
   activeCreateContext.value = {
     kind: 'category',
@@ -1209,6 +1227,7 @@ function resetVaultState() {
   editCollection.value = null
   showPasswordGenerator.value = false
   showWardenSettings.value = false
+  favoritePendingIds.value = new Set()
 
   dropTransferQueue.value = []
   dropTransferTarget.value = {
@@ -1792,32 +1811,6 @@ function canAssignCipherCollections(item) {
   )
 }
 
-function canManageCipherCollections(item) {
-  if (cipherItemIsPersonal(item)) {
-    return true
-  }
-
-  const collectionIds =
-    item?.collectionIds
-    ?? []
-
-  return collectionIds.some(collectionId =>
-    collections.value.some(collection =>
-      normalizeId(collection.id)
-        === normalizeId(collectionId)
-      && collection.manage === true,
-    ),
-  )
-}
-
-function canDuplicateCipherItem(item) {
-  return (
-    canEditCipherItem(item)
-    && canViewPasswordForCipherItem(item)
-    && canManageCipherCollections(item)
-  )
-}
-
 function canDeleteCipherItem(item) {
   return cipherItemIsPersonal(item)
     || item?.permissions?.delete === true
@@ -1826,6 +1819,87 @@ function canDeleteCipherItem(item) {
 function canRestoreCipherItem(item) {
   return cipherItemIsPersonal(item)
     || item?.permissions?.restore === true
+}
+
+function updateFavoriteState(itemId, favorite) {
+  items.value = updateFavoriteInItems(
+    items.value,
+    itemId,
+    favorite,
+  )
+  visibleItems.value = updateFavoriteInItems(
+    visibleItems.value,
+    itemId,
+    favorite,
+  )
+
+  if (
+    normalizeId(selectedItem.value?.id)
+      === normalizeId(itemId)
+  ) {
+    selectedItem.value = {
+      ...selectedItem.value,
+      favorite: Boolean(favorite),
+    }
+  }
+
+  if (
+    normalizeId(editItem.value?.id)
+      === normalizeId(itemId)
+  ) {
+    editItem.value = {
+      ...editItem.value,
+      favorite: Boolean(favorite),
+    }
+  }
+}
+
+async function toggleFavorite(item) {
+  const itemId = normalizeId(item?.id)
+
+  if (
+    !itemId
+    || item?.deletedDate
+    || item?.decryptionFailed === true
+    || favoritePendingIds.value.has(itemId)
+  ) {
+    return
+  }
+
+  const previousFavorite = Boolean(item.favorite)
+  const nextFavorite = !previousFavorite
+
+  favoritePendingIds.value = new Set([
+    ...favoritePendingIds.value,
+    itemId,
+  ])
+  updateFavoriteState(itemId, nextFavorite)
+
+  try {
+    await VaultwardenApi.updateCipherPartial(
+      item.id,
+      favoriteUpdatePayload(item, nextFavorite),
+    )
+  } catch (exception) {
+    updateFavoriteState(itemId, previousFavorite)
+
+    console.error(
+      '[nc_bitwarden] Favorite status could not be changed:',
+      exception,
+    )
+
+    alert(
+      exception?.response?.data?.error
+      || t(
+        'nc_bitwarden',
+        'The favorite status could not be changed.',
+      ),
+    )
+  } finally {
+    const pendingIds = new Set(favoritePendingIds.value)
+    pendingIds.delete(itemId)
+    favoritePendingIds.value = pendingIds
+  }
 }
 
 function denyCipherAction(action, item = null) {
@@ -2573,75 +2647,6 @@ async function deleteSelectedItemsPermanently(
       ),
     )
   }
-}
-
-function cloneItemForDraft(item) {
-  const clone = typeof structuredClone === 'function'
-    ? structuredClone(item)
-    : JSON.parse(JSON.stringify(item))
-
-  /*
-   * Servergebundene und historische Metadaten dürfen nicht
-   * Bestandteil eines neuen Ciphers werden.
-   */
-  delete clone.id
-  delete clone.Id
-  delete clone.revisionDate
-  delete clone.RevisionDate
-  delete clone.creationDate
-  delete clone.CreationDate
-  delete clone.deletedDate
-  delete clone.DeletedDate
-  delete clone.passwordRevisionDate
-  delete clone.PasswordRevisionDate
-  delete clone.passwordHistory
-  delete clone.PasswordHistory
-
-  /*
-   * Attachment-IDs gehören zum ursprünglichen Cipher und
-   * können nicht einfach in einen neuen Eintrag übernommen
-   * werden. Anhänge werden daher bewusst nicht dupliziert.
-   */
-  clone.attachments = []
-  delete clone.Attachments
-
-  /*
-   * FIDO2-Credentials sind eindeutige Passkey-Datensätze.
-   * Eine Kopie derselben Credential-Daten in einem zweiten
-   * Eintrag wäre fachlich und sicherheitstechnisch falsch.
-   */
-  if (
-    clone.login
-    && typeof clone.login === 'object'
-  ) {
-    delete clone.login.fido2Credentials
-    delete clone.login.Fido2Credentials
-    delete clone.login.Fido2credentials
-    delete clone.login.passwordRevisionDate
-    delete clone.login.PasswordRevisionDate
-  }
-
-  clone.name = t(
-    'nc_bitwarden',
-    'Copy of {name}',
-    {
-      name: item.name
-        || t('nc_bitwarden', '(no name)'),
-    },
-  )
-
-  return clone
-}
-
-function openDuplicateForm(item) {
-  if (!canDuplicateCipherItem(item)) {
-    denyCipherAction('duplicate', item)
-    return
-  }
-
-  editItem.value = cloneItemForDraft(item)
-  showForm.value = true
-  selectedItem.value = null
 }
 
 async function deleteItem(item) {

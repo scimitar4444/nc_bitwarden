@@ -2,11 +2,24 @@
   <div class="bw-vault">
     <!-- Hauptsuche mit Tresorbereich und Löschknopf -->
     <div class="bw-vault__search">
+      <label
+        for="bw-vault-global-search"
+        class="bw-vault__global-search-label"
+      >
+        {{ t('nc_bitwarden', 'Global search') }}
+      </label>
+
       <div class="bw-vault__main-search">
+        <MagnifyIcon
+          :size="18"
+          class="bw-vault__global-search-icon"
+        />
+
         <input
+          id="bw-vault-global-search"
           v-model="search"
           type="text"
-          :placeholder="t('nc_bitwarden', 'Search…')"
+          :placeholder="t('nc_bitwarden', 'Search all vault items…')"
           autocomplete="off"
           @keydown.enter.prevent="showSearchResults"
         >
@@ -95,33 +108,6 @@
       </button>
     </div>
 
-    <!-- Sortierung -->
-    <div
-      v-if="advancedMode"
-      class="bw-vault__sort"
-    >
-      <label for="bw-vault-sort">
-        {{ t('nc_bitwarden', 'Sort') }}
-      </label>
-      <select id="bw-vault-sort" v-model="sortMode">
-        <option value="name-asc">
-          {{ t('nc_bitwarden', 'Name A–Z') }}
-        </option>
-        <option value="name-desc">
-          {{ t('nc_bitwarden', 'Name Z–A') }}
-        </option>
-        <option value="favorites">
-          {{ t('nc_bitwarden', 'Favorites first') }}
-        </option>
-        <option value="modified-desc">
-          {{ t('nc_bitwarden', 'Recently modified') }}
-        </option>
-        <option value="modified-asc">
-          {{ t('nc_bitwarden', 'Oldest first') }}
-        </option>
-      </select>
-    </div>
-
     <div class="bw-vault__navigation">
       <!-- Kompakter Kategorienfilter -->
       <div class="bw-vault__folders bw-vault__categories">
@@ -202,7 +188,10 @@
             type="button"
             class="bw-vault__section-toggle"
             :aria-expanded="!collapsedSections.folders"
+            :title="folderSectionToggleLabel"
+            :aria-label="folderSectionToggleLabel"
             @click="toggleSection('folders')"
+            @pointerup="releasePointerFocus"
           >
             <ChevronRightIcon
               v-if="collapsedSections.folders"
@@ -353,72 +342,40 @@
       <!-- Organisation-Sammlungen -->
       <div class="bw-vault__folders">
         <div class="bw-vault__section-heading">
-          <div class="bw-vault__section-heading-main">
-            <button
-              type="button"
-              class="bw-vault__section-toggle"
-              :aria-expanded="!collapsedSections.collections"
-              @click="toggleSection('collections')"
-            >
-              <ChevronRightIcon
-                v-if="collapsedSections.collections"
-                :size="17"
-              />
+          <button
+            v-if="hasNestedCollections"
+            type="button"
+            class="bw-vault__section-toggle"
+            :aria-expanded="!allCollectionBranchesCollapsed"
+            :title="collectionSectionToggleLabel"
+            :aria-label="collectionSectionToggleLabel"
+            @click="toggleCollectionBranches"
+            @pointerup="releasePointerFocus"
+          >
+            <ChevronRightIcon
+              v-if="allCollectionBranchesCollapsed"
+              :size="17"
+            />
 
-              <ChevronDownIcon
-                v-else
-                :size="17"
-              />
+            <ChevronDownIcon
+              v-else
+              :size="17"
+            />
 
-              <span class="bw-vault__section-title">
-                {{ t('nc_bitwarden', 'Collections') }}
-              </span>
-            </button>
+            <span class="bw-vault__section-title">
+              {{ t('nc_bitwarden', 'Collections') }}
+            </span>
+          </button>
 
-            <button
-              v-if="advancedMode"
-              type="button"
-              class="bw-vault__tree-action"
-              :disabled="allCollectionRows.length === 0"
-              :title="
-                t(
-                  'nc_bitwarden',
-                  'Collapse all collections',
-                )
-              "
-              :aria-label="
-                t(
-                  'nc_bitwarden',
-                  'Collapse all collections',
-                )
-              "
-              @click.stop="collapseAllCollections"
-            >
-              <ChevronRightIcon :size="16" />
-            </button>
-
-            <button
-              v-if="advancedMode"
-              type="button"
-              class="bw-vault__tree-action"
-              :disabled="allCollectionRows.length === 0"
-              :title="
-                t(
-                  'nc_bitwarden',
-                  'Expand all collections',
-                )
-              "
-              :aria-label="
-                t(
-                  'nc_bitwarden',
-                  'Expand all collections',
-                )
-              "
-              @click.stop="expandAllCollections"
-            >
-              <ChevronDownIcon :size="16" />
-            </button>
-          </div>
+          <span
+            v-else
+            class="
+              bw-vault__section-title
+              bw-vault__section-title--static
+            "
+          >
+            {{ t('nc_bitwarden', 'Collections') }}
+          </span>
 
           <button
             v-if="
@@ -438,17 +395,16 @@
         <div
           v-if="
             advancedMode
-              && !collapsedSections.collections
               && allCollectionRows.length > 0
           "
           class="bw-collection-search"
         >
-          <MagnifyIcon :size="17" />
+          <FilterOutlineIcon :size="17" />
 
           <input
             v-model="collectionSearch"
             type="search"
-            :placeholder="t('nc_bitwarden', 'Search collections…')"
+            :placeholder="t('nc_bitwarden', 'Filter collection names…')"
             autocomplete="off"
           >
 
@@ -466,7 +422,6 @@
         <div
           v-if="
             advancedMode
-              && !collapsedSections.collections
               && collectionSearch
           "
           class="bw-collection-search__summary"
@@ -480,11 +435,12 @@
 
         <div
           v-for="collection in collectionRows"
-          v-show="!collapsedSections.collections"
-          :key="collection.id"
+          :key="collection.nodeKey"
           class="bw-folder-row"
           :class="{
             'bw-folder-row--active':
+              !collection.isVirtual
+              &&
               selectedCollection === normalizeId(collection.id),
             'bw-drop-target--active':
               dropTargetKey
@@ -509,7 +465,7 @@
               paddingLeft: `${0.75 + collection.depth * 1.1}rem`,
             }"
             :title="collection.path"
-            @click="selectCollection(collection.id)"
+            @click="selectCollectionWithBranchToggle(collection)"
           >
             <span
               class="bw-collection__toggle"
@@ -533,7 +489,14 @@
               />
             </span>
 
+            <FolderOutlineIcon
+              v-if="collection.isVirtual"
+              :size="17"
+              class="bw-folder__icon"
+            />
+
             <ArchiveOutlineIcon
+              v-else
               :size="17"
               class="bw-folder__icon"
             />
@@ -601,7 +564,7 @@
               bw-folder-row__count
             "
           >
-            {{ collectionCount(collection.id) }}
+            {{ collectionRowCount(collection) }}
           </span>
         </div>
       </div>
@@ -659,6 +622,7 @@ import ChevronDownIcon from 'vue-material-design-icons/ChevronDown.vue'
 import PencilOutlineIcon from 'vue-material-design-icons/PencilOutline.vue'
 import DeleteOutlineIcon from 'vue-material-design-icons/DeleteOutline.vue'
 import MagnifyIcon from 'vue-material-design-icons/Magnify.vue'
+import FilterOutlineIcon from 'vue-material-design-icons/FilterOutline.vue'
 import CloseIcon from 'vue-material-design-icons/Close.vue'
 import AccountOutlineIcon from 'vue-material-design-icons/AccountOutline.vue'
 import DomainIcon from 'vue-material-design-icons/Domain.vue'
@@ -669,6 +633,9 @@ import {
   collectionMatchesQuery,
   normalizeCollectionSearch,
 } from '../utils/collectionSearch.js'
+import {
+  buildCollectionTreeRows,
+} from '../utils/collectionTree.js'
 import {
   createVaultSearchIndex,
   normalizeVaultSearch,
@@ -694,6 +661,10 @@ const props = defineProps({
   advancedMode: {
     type: Boolean,
     required: true,
+  },
+  sortMode: {
+    type: String,
+    default: 'name-asc',
   },
   selectedId: {
     type: String,
@@ -1023,7 +994,6 @@ function storeNavigationSelection() {
   }
 }
 
-const sortMode = ref('name-asc')
 const collapsedCollectionPaths = ref(new Set())
 const collectionSearch = ref('')
 const categoryMenu = ref(null)
@@ -1038,7 +1008,6 @@ watch(
       return
     }
 
-    sortMode.value = 'name-asc'
     collectionSearch.value = ''
   },
   {
@@ -1053,6 +1022,12 @@ const collapsedSections = ref({
   folders: initialNavigationSections.folders,
   collections: initialNavigationSections.collections,
 })
+
+const folderSectionToggleLabel = computed(() =>
+  collapsedSections.value.folders
+    ? t('nc_bitwarden', 'Expand folders section')
+    : t('nc_bitwarden', 'Collapse folders section'),
+)
 
 const categories = [
   {
@@ -1156,14 +1131,6 @@ function normalizeId(value) {
   return String(value).trim().toLowerCase()
 }
 
-function normalizePath(value) {
-  return String(value ?? '')
-    .split('/')
-    .map(part => part.trim())
-    .filter(Boolean)
-    .join('/')
-}
-
 const canCreateCollection = computed(() =>
   (props.organizations ?? []).some(
     organization => organization.canCreateCollections,
@@ -1177,20 +1144,7 @@ const sortedFolders = computed(() => {
 })
 
 const allCollectionRows = computed(() => {
-  const rows = (props.collections ?? [])
-    .map(collection => {
-      const path = normalizePath(collection.name)
-      const parts = path ? path.split('/') : ['(ohne Name)']
-      const organizationId = normalizeId(collection.organizationId) ?? ''
-
-      return {
-        ...collection,
-        path,
-        label: parts[parts.length - 1],
-        depth: Math.max(parts.length - 1, 0),
-        nodeKey: `${organizationId}:${path}`,
-      }
-    })
+  return buildCollectionTreeRows(props.collections)
     .sort((a, b) => {
       const organizationDifference = nameCollator.compare(
         normalizeId(a.organizationId) ?? '',
@@ -1199,17 +1153,30 @@ const allCollectionRows = computed(() => {
 
       return organizationDifference || nameCollator.compare(a.path, b.path)
     })
-
-  return rows.map(row => ({
-    ...row,
-    hasChildren: rows.some(candidate =>
-      normalizeId(candidate.organizationId)
-        === normalizeId(row.organizationId)
-      && candidate.path !== row.path
-      && candidate.path.startsWith(`${row.path}/`),
-    ),
-  }))
 })
+
+const collectionBranchKeys = computed(() =>
+  allCollectionRows.value
+    .filter(collection => collection.hasChildren)
+    .map(collection => collection.nodeKey),
+)
+
+const hasNestedCollections = computed(() =>
+  collectionBranchKeys.value.length > 0,
+)
+
+const allCollectionBranchesCollapsed = computed(() =>
+  hasNestedCollections.value
+  && collectionBranchKeys.value.every(key =>
+    collapsedCollectionPaths.value.has(key),
+  ),
+)
+
+const collectionSectionToggleLabel = computed(() =>
+  allCollectionBranchesCollapsed.value
+    ? t('nc_bitwarden', 'Expand all subcollections')
+    : t('nc_bitwarden', 'Collapse all subcollections'),
+)
 
 const normalizedCollectionQuery = computed(() =>
   normalizeCollectionSearch(collectionSearch.value),
@@ -1357,9 +1324,10 @@ function canDropOnCollection(event, collection) {
    * IDs und Besitzer werden erst beim tatsächlichen Drop
    * geprüft.
    */
-  return normalizeId(
-    collection?.organizationId,
-  ) !== null
+  return !collection?.isVirtual
+    && normalizeId(
+      collection?.organizationId,
+    ) !== null
 }
 
 function rejectDrop(event) {
@@ -1497,6 +1465,19 @@ function selectCollection(collectionId) {
   emit('navigate')
 }
 
+function selectCollectionWithBranchToggle(collection) {
+  if (collection.isVirtual) {
+    toggleCollection(collection)
+    return
+  }
+
+  selectCollection(collection.id)
+
+  if (collection.hasChildren) {
+    toggleCollection(collection)
+  }
+}
+
 function toggleSection(section) {
   const nextSections = {
     ...collapsedSections.value,
@@ -1511,24 +1492,25 @@ function toggleSection(section) {
   )
 }
 
-function collapseAllCollections() {
-  collapsedCollectionPaths.value = new Set(
-    allCollectionRows.value
-      .filter(collection => collection.hasChildren)
-      .map(collection => collection.nodeKey),
-  )
-
-  storeNavigationSections(
-    collapsedSections.value,
-    collapsedCollectionPaths.value,
-  )
+function releasePointerFocus(event) {
+  event.currentTarget?.blur()
 }
 
-function expandAllCollections() {
-  collapsedCollectionPaths.value = new Set()
+function toggleCollectionBranches() {
+  const collapsing = !allCollectionBranchesCollapsed.value
+  const nextSections = {
+    ...collapsedSections.value,
+    collections: collapsing,
+  }
+
+  collapsedCollectionPaths.value = collapsing
+    ? new Set(collectionBranchKeys.value)
+    : new Set()
+
+  collapsedSections.value = nextSections
 
   storeNavigationSections(
-    collapsedSections.value,
+    nextSections,
     collapsedCollectionPaths.value,
   )
 }
@@ -1653,6 +1635,28 @@ function collectionCount(collectionId) {
   ).length
 }
 
+function collectionRowCount(collection) {
+  if (!collection.isVirtual) {
+    return collectionCount(collection.id)
+  }
+
+  const descendantIds = allCollectionRows.value
+    .filter(candidate =>
+      !candidate.isVirtual
+      && normalizeId(candidate.organizationId)
+        === normalizeId(collection.organizationId)
+      && candidate.path.startsWith(`${collection.path}/`),
+    )
+    .map(candidate => candidate.id)
+
+  return (props.items ?? []).filter(item =>
+    !isDeletedItem(item)
+    && descendantIds.some(collectionId =>
+      itemBelongsToCollection(item, collectionId),
+    ),
+  ).length
+}
+
 function compareName(a, b) {
   return nameCollator.compare(a.name ?? '', b.name ?? '')
 }
@@ -1702,7 +1706,7 @@ function searchScopeMatches(item) {
 const sortedItems = computed(() => {
   const list = [...(props.items ?? [])]
 
-  switch (sortMode.value) {
+  switch (props.sortMode) {
     case 'name-desc':
       return list.sort((a, b) => compareName(b, a))
 
@@ -2189,6 +2193,18 @@ watch(
 /* ── Suchleiste ── */
 .bw-vault__search {
   padding: 0.75rem 0.75rem 0.5rem;
+  border-bottom: 1px solid var(--color-primary-element);
+  background: var(--color-primary-element-light);
+}
+
+.bw-vault__global-search-label {
+  display: block;
+  margin: 0 0 0.35rem 0.15rem;
+  color: var(--color-main-text);
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
 }
 
 .bw-vault__main-search {
@@ -2197,9 +2213,14 @@ watch(
   gap: 0.4rem;
   min-height: 40px;
   padding: 0.25rem 0.4rem;
-  border: 1px solid var(--color-border-dark);
+  border: 1px solid var(--color-primary-element);
   border-radius: var(--border-radius);
   background: var(--color-main-background);
+}
+
+.bw-vault__global-search-icon {
+  flex: 0 0 auto;
+  color: var(--color-primary-element);
 }
 
 .bw-vault__main-search input {
@@ -2247,29 +2268,6 @@ watch(
   display: none;
 }
 
-.bw-vault__sort {
-  display: flex;
-  align-items: center;
-  gap: 0.6rem;
-  padding: 0 0.75rem 0.75rem;
-  border-bottom: 1px solid var(--color-border);
-}
-
-.bw-vault__sort label {
-  font-size: 0.8rem;
-  color: var(--color-text-maxcontrast);
-}
-
-.bw-vault__sort select {
-  flex: 1;
-  min-width: 0;
-  padding: 0.35rem 0.5rem;
-  border: 1px solid var(--color-border-dark);
-  border-radius: var(--border-radius);
-  background: var(--color-main-background);
-  color: var(--color-main-text);
-}
-
 .bw-vault__navigation {
   flex: 1;
   min-height: 0;
@@ -2287,15 +2285,11 @@ watch(
   padding-right: 0.5rem;
 }
 
-.bw-vault__section-heading-main {
-  display: flex;
-  min-width: 0;
-  align-items: center;
-}
-
 .bw-vault__section-toggle {
   display: flex;
   min-width: 0;
+  min-height: 32px;
+  flex: 1;
   align-items: center;
   gap: 0.15rem;
   padding: 0 0 0 0.5rem;
@@ -2305,11 +2299,19 @@ watch(
   color: var(--color-main-text);
   cursor: pointer;
   text-align: left;
+  box-shadow: none;
+  user-select: none;
 }
 
 .bw-vault__section-toggle:hover,
 .bw-vault__section-toggle:focus-visible {
   background: var(--color-background-hover);
+}
+
+.bw-vault__section-toggle:focus:not(:focus-visible) {
+  outline: none !important;
+  background: transparent !important;
+  box-shadow: none !important;
 }
 
 .bw-vault__section-title {
@@ -2319,32 +2321,6 @@ watch(
   color: var(--color-text-maxcontrast);
   text-transform: uppercase;
   letter-spacing: 0.04em;
-}
-
-.bw-vault__tree-action {
-  display: flex;
-  width: 24px;
-  height: 24px;
-  flex-shrink: 0;
-  align-items: center;
-  justify-content: center;
-  padding: 0;
-  border: none;
-  border-radius: var(--border-radius);
-  background: transparent;
-  color: var(--color-text-maxcontrast);
-  cursor: pointer;
-}
-
-.bw-vault__tree-action:hover,
-.bw-vault__tree-action:focus-visible {
-  background: var(--color-background-hover);
-  color: var(--color-main-text);
-}
-
-.bw-vault__tree-action:disabled {
-  cursor: default;
-  opacity: 0.35;
 }
 
 .bw-vault__section-action {
@@ -2611,8 +2587,20 @@ watch(
   flex: 1;
 }
 
-.bw-folder--main:hover {
-  background: transparent;
+.bw-folder--main:hover,
+.bw-folder--main:focus,
+.bw-folder--main:active {
+  border-color: transparent !important;
+  outline: none !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+.bw-folder-row:has(> .bw-folder--main:focus-visible):not(
+  .bw-folder-row--active
+) {
+  outline: 2px solid var(--color-primary-element);
+  outline-offset: -2px;
 }
 
 .bw-folder-row__actions {
