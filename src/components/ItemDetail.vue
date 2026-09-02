@@ -89,7 +89,7 @@
             v-if="canQuickCopyTotp"
             :title="quickCopyTitle('totp')"
             :aria-label="quickCopyTitle('totp')"
-            @click="copyLoginValue('totp')"
+            @click="copyLoginValue('totp', $event)"
           >
             <CheckIcon
               v-if="quickCopyAction === 'totp'"
@@ -103,7 +103,7 @@
             v-if="canQuickCopyPassword"
             :title="quickCopyTitle('password')"
             :aria-label="quickCopyTitle('password')"
-            @click="copyLoginValue('password')"
+            @click="copyLoginValue('password', $event)"
           >
             <CheckIcon
               v-if="quickCopyAction === 'password'"
@@ -1261,7 +1261,9 @@ function showQuickCopyFeedback(type, copied) {
   }, 1600)
 }
 
-async function copyLoginValue(type) {
+async function copyLoginValue(type, event) {
+  const actionButton = event?.currentTarget
+  const pointerTriggered = Number(event?.detail) > 0
   const allowed = type === LOGIN_QUICK_COPY_TOTP
     ? canQuickCopyTotp.value
     : canQuickCopyPassword.value
@@ -1280,6 +1282,10 @@ async function copyLoginValue(type) {
     showQuickCopyFeedback(type, copied)
   } catch {
     showQuickCopyFeedback(type, false)
+  } finally {
+    if (pointerTriggered) {
+      actionButton?.blur()
+    }
   }
 }
 
