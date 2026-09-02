@@ -435,10 +435,12 @@
 
         <div
           v-for="collection in collectionRows"
-          :key="collection.id"
+          :key="collection.nodeKey"
           class="bw-folder-row"
           :class="{
             'bw-folder-row--active':
+              !collection.isVirtual
+              &&
               selectedCollection === normalizeId(collection.id),
             'bw-drop-target--active':
               dropTargetKey
@@ -487,7 +489,14 @@
               />
             </span>
 
+            <FolderOutlineIcon
+              v-if="collection.isVirtual"
+              :size="17"
+              class="bw-folder__icon"
+            />
+
             <ArchiveOutlineIcon
+              v-else
               :size="17"
               class="bw-folder__icon"
             />
@@ -555,7 +564,7 @@
               bw-folder-row__count
             "
           >
-            {{ collectionCount(collection.id) }}
+            {{ collectionRowCount(collection) }}
           </span>
         </div>
       </div>
@@ -624,6 +633,9 @@ import {
   collectionMatchesQuery,
   normalizeCollectionSearch,
 } from '../utils/collectionSearch.js'
+import {
+  buildCollectionTreeRows,
+} from '../utils/collectionTree.js'
 import {
   createVaultSearchIndex,
   normalizeVaultSearch,
@@ -1119,14 +1131,6 @@ function normalizeId(value) {
   return String(value).trim().toLowerCase()
 }
 
-function normalizePath(value) {
-  return String(value ?? '')
-    .split('/')
-    .map(part => part.trim())
-    .filter(Boolean)
-    .join('/')
-}
-
 const canCreateCollection = computed(() =>
   (props.organizations ?? []).some(
     organization => organization.canCreateCollections,
@@ -1140,20 +1144,7 @@ const sortedFolders = computed(() => {
 })
 
 const allCollectionRows = computed(() => {
-  const rows = (props.collections ?? [])
-    .map(collection => {
-      const path = normalizePath(collection.name)
-      const parts = path ? path.split('/') : ['(ohne Name)']
-      const organizationId = normalizeId(collection.organizationId) ?? ''
-
-      return {
-        ...collection,
-        path,
-        label: parts[parts.length - 1],
-        depth: Math.max(parts.length - 1, 0),
-        nodeKey: `${organizationId}:${path}`,
-      }
-    })
+  return buildCollectionTreeRows(props.collections)
     .sort((a, b) => {
       const organizationDifference = nameCollator.compare(
         normalizeId(a.organizationId) ?? '',
@@ -1162,16 +1153,6 @@ const allCollectionRows = computed(() => {
 
       return organizationDifference || nameCollator.compare(a.path, b.path)
     })
-
-  return rows.map(row => ({
-    ...row,
-    hasChildren: rows.some(candidate =>
-      normalizeId(candidate.organizationId)
-        === normalizeId(row.organizationId)
-      && candidate.path !== row.path
-      && candidate.path.startsWith(`${row.path}/`),
-    ),
-  }))
 })
 
 const collectionBranchKeys = computed(() =>
@@ -1343,9 +1324,10 @@ function canDropOnCollection(event, collection) {
    * IDs und Besitzer werden erst beim tatsächlichen Drop
    * geprüft.
    */
-  return normalizeId(
-    collection?.organizationId,
-  ) !== null
+  return !collection?.isVirtual
+    && normalizeId(
+      collection?.organizationId,
+    ) !== null
 }
 
 function rejectDrop(event) {
@@ -1484,6 +1466,11 @@ function selectCollection(collectionId) {
 }
 
 function selectCollectionWithBranchToggle(collection) {
+  if (collection.isVirtual) {
+    toggleCollection(collection)
+    return
+  }
+
   selectCollection(collection.id)
 
   if (collection.hasChildren) {
@@ -1644,6 +1631,28 @@ function collectionCount(collectionId) {
     && itemBelongsToCollection(
       item,
       collectionId,
+    ),
+  ).length
+}
+
+function collectionRowCount(collection) {
+  if (!collection.isVirtual) {
+    return collectionCount(collection.id)
+  }
+
+  const descendantIds = allCollectionRows.value
+    .filter(candidate =>
+      !candidate.isVirtual
+      && normalizeId(candidate.organizationId)
+        === normalizeId(collection.organizationId)
+      && candidate.path.startsWith(`${collection.path}/`),
+    )
+    .map(candidate => candidate.id)
+
+  return (props.items ?? []).filter(item =>
+    !isDeletedItem(item)
+    && descendantIds.some(collectionId =>
+      itemBelongsToCollection(item, collectionId),
     ),
   ).length
 }
