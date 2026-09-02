@@ -202,6 +202,8 @@
             type="button"
             class="bw-vault__section-toggle"
             :aria-expanded="!collapsedSections.folders"
+            :title="folderSectionToggleLabel"
+            :aria-label="folderSectionToggleLabel"
             @click="toggleSection('folders')"
           >
             <ChevronRightIcon
@@ -353,86 +355,84 @@
       <!-- Organisation-Sammlungen -->
       <div class="bw-vault__folders">
         <div class="bw-vault__section-heading">
-          <div class="bw-vault__section-heading-main">
-            <button
-              type="button"
-              class="bw-vault__section-toggle"
-              :aria-expanded="!collapsedSections.collections"
-              @click="toggleSection('collections')"
+          <button
+            type="button"
+            class="bw-vault__section-toggle"
+            :aria-expanded="!collapsedSections.collections"
+            :title="collectionSectionToggleLabel"
+            :aria-label="collectionSectionToggleLabel"
+            @click="toggleSection('collections')"
+          >
+            <ChevronRightIcon
+              v-if="collapsedSections.collections"
+              :size="17"
+            />
+
+            <ChevronDownIcon
+              v-else
+              :size="17"
+            />
+
+            <span class="bw-vault__section-title">
+              {{ t('nc_bitwarden', 'Collections') }}
+            </span>
+          </button>
+
+          <div class="bw-vault__section-actions">
+            <details
+              v-if="
+                advancedMode
+                  && hasNestedCollections
+              "
+              ref="collectionTreeMenu"
+              class="bw-vault__tree-menu"
             >
-              <ChevronRightIcon
-                v-if="collapsedSections.collections"
-                :size="17"
-              />
+              <summary
+                :title="t('nc_bitwarden', 'Collection display options')"
+                :aria-label="t('nc_bitwarden', 'Collection display options')"
+              >
+                <DotsHorizontalIcon :size="19" />
+              </summary>
 
-              <ChevronDownIcon
-                v-else
-                :size="17"
-              />
+              <div class="bw-vault__tree-menu-popover">
+                <button
+                  type="button"
+                  @click.stop="collapseAllCollectionsFromMenu"
+                >
+                  <ArrowCollapseAllIcon :size="18" />
+                  <span>{{ t(
+                    'nc_bitwarden',
+                    'Collapse all collections',
+                  ) }}</span>
+                </button>
 
-              <span class="bw-vault__section-title">
-                {{ t('nc_bitwarden', 'Collections') }}
-              </span>
-            </button>
-
-            <button
-              v-if="advancedMode"
-              type="button"
-              class="bw-vault__tree-action"
-              :disabled="allCollectionRows.length === 0"
-              :title="
-                t(
-                  'nc_bitwarden',
-                  'Collapse all collections',
-                )
-              "
-              :aria-label="
-                t(
-                  'nc_bitwarden',
-                  'Collapse all collections',
-                )
-              "
-              @click.stop="collapseAllCollections"
-            >
-              <ChevronRightIcon :size="16" />
-            </button>
+                <button
+                  type="button"
+                  @click.stop="expandAllCollectionsFromMenu"
+                >
+                  <ArrowExpandAllIcon :size="18" />
+                  <span>{{ t(
+                    'nc_bitwarden',
+                    'Expand all collections',
+                  ) }}</span>
+                </button>
+              </div>
+            </details>
 
             <button
-              v-if="advancedMode"
+              v-if="
+                advancedMode
+                  && canCreateCollection
+              "
               type="button"
-              class="bw-vault__tree-action"
-              :disabled="allCollectionRows.length === 0"
-              :title="
-                t(
-                  'nc_bitwarden',
-                  'Expand all collections',
-                )
-              "
-              :aria-label="
-                t(
-                  'nc_bitwarden',
-                  'Expand all collections',
-                )
-              "
-              @click.stop="expandAllCollections"
+              class="bw-vault__section-action"
+              :title="t('nc_bitwarden', 'Create new collection')"
+              :aria-label="t('nc_bitwarden', 'Create new collection')"
+              @click.stop="$emit('create-collection')"
             >
-              <ChevronDownIcon :size="16" />
+              <PlusIcon :size="18" />
             </button>
           </div>
-
-          <button
-            v-if="
-              advancedMode
-                && canCreateCollection
-            "
-            type="button"
-            class="bw-vault__section-action"
-            :title="t('nc_bitwarden', 'Create new collection')"
-            :aria-label="t('nc_bitwarden', 'Create new collection')"
-            @click.stop="$emit('create-collection')"
-          >
-            <PlusIcon :size="18" />
-          </button>
         </div>
 
         <div
@@ -656,6 +656,9 @@ import FolderOutlineIcon from 'vue-material-design-icons/FolderOutline.vue'
 import ArchiveOutlineIcon from 'vue-material-design-icons/ArchiveOutline.vue'
 import ChevronRightIcon from 'vue-material-design-icons/ChevronRight.vue'
 import ChevronDownIcon from 'vue-material-design-icons/ChevronDown.vue'
+import DotsHorizontalIcon from 'vue-material-design-icons/DotsHorizontal.vue'
+import ArrowCollapseAllIcon from 'vue-material-design-icons/ArrowCollapseAll.vue'
+import ArrowExpandAllIcon from 'vue-material-design-icons/ArrowExpandAll.vue'
 import PencilOutlineIcon from 'vue-material-design-icons/PencilOutline.vue'
 import DeleteOutlineIcon from 'vue-material-design-icons/DeleteOutline.vue'
 import MagnifyIcon from 'vue-material-design-icons/Magnify.vue'
@@ -1027,6 +1030,7 @@ const sortMode = ref('name-asc')
 const collapsedCollectionPaths = ref(new Set())
 const collectionSearch = ref('')
 const categoryMenu = ref(null)
+const collectionTreeMenu = ref(null)
 const navigationInitialized = ref(false)
 const navigationSelectionInitialized = ref(false)
 const dropTargetKey = ref('')
@@ -1053,6 +1057,18 @@ const collapsedSections = ref({
   folders: initialNavigationSections.folders,
   collections: initialNavigationSections.collections,
 })
+
+const folderSectionToggleLabel = computed(() =>
+  collapsedSections.value.folders
+    ? t('nc_bitwarden', 'Expand folders section')
+    : t('nc_bitwarden', 'Collapse folders section'),
+)
+
+const collectionSectionToggleLabel = computed(() =>
+  collapsedSections.value.collections
+    ? t('nc_bitwarden', 'Expand collections section')
+    : t('nc_bitwarden', 'Collapse collections section'),
+)
 
 const categories = [
   {
@@ -1210,6 +1226,12 @@ const allCollectionRows = computed(() => {
     ),
   }))
 })
+
+const hasNestedCollections = computed(() =>
+  allCollectionRows.value.some(collection =>
+    collection.hasChildren,
+  ),
+)
 
 const normalizedCollectionQuery = computed(() =>
   normalizeCollectionSearch(collectionSearch.value),
@@ -1531,6 +1553,22 @@ function expandAllCollections() {
     collapsedSections.value,
     collapsedCollectionPaths.value,
   )
+}
+
+function closeCollectionTreeMenu() {
+  if (collectionTreeMenu.value) {
+    collectionTreeMenu.value.open = false
+  }
+}
+
+function collapseAllCollectionsFromMenu() {
+  collapseAllCollections()
+  closeCollectionTreeMenu()
+}
+
+function expandAllCollectionsFromMenu() {
+  expandAllCollections()
+  closeCollectionTreeMenu()
 }
 
 function toggleCollection(collection) {
@@ -1867,26 +1905,33 @@ const activeCreateContext = computed(() => {
   }
 })
 
-function closeCategoryMenuOnOutsidePointer(event) {
+function closeNavigationMenusOnOutsidePointer(event) {
   if (
     categoryMenu.value?.open
     && !categoryMenu.value.contains(event.target)
   ) {
     categoryMenu.value.open = false
   }
+
+  if (
+    collectionTreeMenu.value?.open
+    && !collectionTreeMenu.value.contains(event.target)
+  ) {
+    collectionTreeMenu.value.open = false
+  }
 }
 
 onMounted(() => {
   document.addEventListener(
     'pointerdown',
-    closeCategoryMenuOnOutsidePointer,
+    closeNavigationMenusOnOutsidePointer,
   )
 })
 
 onBeforeUnmount(() => {
   document.removeEventListener(
     'pointerdown',
-    closeCategoryMenuOnOutsidePointer,
+    closeNavigationMenusOnOutsidePointer,
   )
 })
 
@@ -2287,15 +2332,18 @@ watch(
   padding-right: 0.5rem;
 }
 
-.bw-vault__section-heading-main {
+.bw-vault__section-actions {
   display: flex;
-  min-width: 0;
+  flex-shrink: 0;
   align-items: center;
+  gap: 0.1rem;
 }
 
 .bw-vault__section-toggle {
   display: flex;
   min-width: 0;
+  min-height: 32px;
+  flex: 1;
   align-items: center;
   gap: 0.15rem;
   padding: 0 0 0 0.5rem;
@@ -2321,30 +2369,66 @@ watch(
   letter-spacing: 0.04em;
 }
 
-.bw-vault__tree-action {
-  display: flex;
-  width: 24px;
-  height: 24px;
-  flex-shrink: 0;
-  align-items: center;
-  justify-content: center;
-  padding: 0;
-  border: none;
-  border-radius: var(--border-radius);
-  background: transparent;
-  color: var(--color-text-maxcontrast);
-  cursor: pointer;
+.bw-vault__tree-menu {
+  position: relative;
 }
 
-.bw-vault__tree-action:hover,
-.bw-vault__tree-action:focus-visible {
+.bw-vault__tree-menu summary {
+  display: flex;
+  width: 28px;
+  height: 28px;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--border-radius);
+  color: var(--color-text-maxcontrast);
+  cursor: pointer;
+  list-style: none;
+}
+
+.bw-vault__tree-menu summary::-webkit-details-marker {
+  display: none;
+}
+
+.bw-vault__tree-menu summary:hover,
+.bw-vault__tree-menu summary:focus-visible,
+.bw-vault__tree-menu[open] summary {
   background: var(--color-background-hover);
   color: var(--color-main-text);
 }
 
-.bw-vault__tree-action:disabled {
-  cursor: default;
-  opacity: 0.35;
+.bw-vault__tree-menu-popover {
+  position: absolute;
+  z-index: 30;
+  top: calc(100% + 0.25rem);
+  right: 0;
+  width: max-content;
+  min-width: 210px;
+  padding: 0.3rem;
+  border: 1px solid var(--color-border-dark);
+  border-radius: var(--border-radius-large);
+  background: var(--color-main-background);
+  box-shadow: 0 6px 20px rgb(0 0 0 / 18%);
+}
+
+.bw-vault__tree-menu-popover button {
+  display: flex;
+  width: 100%;
+  min-height: 36px;
+  align-items: center;
+  gap: 0.55rem;
+  padding: 0.35rem 0.55rem;
+  border: 0;
+  border-radius: var(--border-radius);
+  background: transparent;
+  color: var(--color-main-text);
+  cursor: pointer;
+  font-size: 0.85rem;
+  text-align: left;
+}
+
+.bw-vault__tree-menu-popover button:hover,
+.bw-vault__tree-menu-popover button:focus-visible {
+  background: var(--color-background-hover);
 }
 
 .bw-vault__section-action {
