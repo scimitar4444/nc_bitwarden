@@ -2,11 +2,24 @@
   <div class="bw-vault">
     <!-- Hauptsuche mit Tresorbereich und Löschknopf -->
     <div class="bw-vault__search">
+      <label
+        for="bw-vault-global-search"
+        class="bw-vault__global-search-label"
+      >
+        {{ t('nc_bitwarden', 'Global search') }}
+      </label>
+
       <div class="bw-vault__main-search">
+        <MagnifyIcon
+          :size="18"
+          class="bw-vault__global-search-icon"
+        />
+
         <input
+          id="bw-vault-global-search"
           v-model="search"
           type="text"
-          :placeholder="t('nc_bitwarden', 'Search…')"
+          :placeholder="t('nc_bitwarden', 'Search all vault items…')"
           autocomplete="off"
           @keydown.enter.prevent="showSearchResults"
         >
@@ -356,15 +369,16 @@
       <div class="bw-vault__folders">
         <div class="bw-vault__section-heading">
           <button
+            v-if="hasNestedCollections"
             type="button"
             class="bw-vault__section-toggle"
-            :aria-expanded="!collapsedSections.collections"
+            :aria-expanded="!allCollectionBranchesCollapsed"
             :title="collectionSectionToggleLabel"
             :aria-label="collectionSectionToggleLabel"
-            @click="toggleCollectionsSection"
+            @click="toggleCollectionBranches"
           >
             <ChevronRightIcon
-              v-if="collapsedSections.collections"
+              v-if="allCollectionBranchesCollapsed"
               :size="17"
             />
 
@@ -377,6 +391,16 @@
               {{ t('nc_bitwarden', 'Collections') }}
             </span>
           </button>
+
+          <span
+            v-else
+            class="
+              bw-vault__section-title
+              bw-vault__section-title--static
+            "
+          >
+            {{ t('nc_bitwarden', 'Collections') }}
+          </span>
 
           <button
             v-if="
@@ -396,17 +420,16 @@
         <div
           v-if="
             advancedMode
-              && !collapsedSections.collections
               && allCollectionRows.length > 0
           "
           class="bw-collection-search"
         >
-          <MagnifyIcon :size="17" />
+          <FilterOutlineIcon :size="17" />
 
           <input
             v-model="collectionSearch"
             type="search"
-            :placeholder="t('nc_bitwarden', 'Search collections…')"
+            :placeholder="t('nc_bitwarden', 'Filter collection names…')"
             autocomplete="off"
           >
 
@@ -424,7 +447,6 @@
         <div
           v-if="
             advancedMode
-              && !collapsedSections.collections
               && collectionSearch
           "
           class="bw-collection-search__summary"
@@ -438,7 +460,6 @@
 
         <div
           v-for="collection in collectionRows"
-          v-show="!collapsedSections.collections"
           :key="collection.id"
           class="bw-folder-row"
           :class="{
@@ -617,6 +638,7 @@ import ChevronDownIcon from 'vue-material-design-icons/ChevronDown.vue'
 import PencilOutlineIcon from 'vue-material-design-icons/PencilOutline.vue'
 import DeleteOutlineIcon from 'vue-material-design-icons/DeleteOutline.vue'
 import MagnifyIcon from 'vue-material-design-icons/Magnify.vue'
+import FilterOutlineIcon from 'vue-material-design-icons/FilterOutline.vue'
 import CloseIcon from 'vue-material-design-icons/Close.vue'
 import AccountOutlineIcon from 'vue-material-design-icons/AccountOutline.vue'
 import DomainIcon from 'vue-material-design-icons/Domain.vue'
@@ -1018,12 +1040,6 @@ const folderSectionToggleLabel = computed(() =>
     : t('nc_bitwarden', 'Collapse folders section'),
 )
 
-const collectionSectionToggleLabel = computed(() =>
-  collapsedSections.value.collections
-    ? t('nc_bitwarden', 'Expand collections section')
-    : t('nc_bitwarden', 'Collapse collections section'),
-)
-
 const categories = [
   {
     id: 'all',
@@ -1180,6 +1196,29 @@ const allCollectionRows = computed(() => {
     ),
   }))
 })
+
+const collectionBranchKeys = computed(() =>
+  allCollectionRows.value
+    .filter(collection => collection.hasChildren)
+    .map(collection => collection.nodeKey),
+)
+
+const hasNestedCollections = computed(() =>
+  collectionBranchKeys.value.length > 0,
+)
+
+const allCollectionBranchesCollapsed = computed(() =>
+  hasNestedCollections.value
+  && collectionBranchKeys.value.every(key =>
+    collapsedCollectionPaths.value.has(key),
+  ),
+)
+
+const collectionSectionToggleLabel = computed(() =>
+  allCollectionBranchesCollapsed.value
+    ? t('nc_bitwarden', 'Expand all subcollections')
+    : t('nc_bitwarden', 'Collapse all subcollections'),
+)
 
 const normalizedCollectionQuery = computed(() =>
   normalizeCollectionSearch(collectionSearch.value),
@@ -1481,16 +1520,16 @@ function toggleSection(section) {
   )
 }
 
-function toggleCollectionsSection() {
-  const expanding = collapsedSections.value.collections
+function toggleCollectionBranches() {
+  const collapsing = !allCollectionBranchesCollapsed.value
   const nextSections = {
     ...collapsedSections.value,
-    collections: !expanding,
+    collections: collapsing,
   }
 
-  if (expanding) {
-    collapsedCollectionPaths.value = new Set()
-  }
+  collapsedCollectionPaths.value = collapsing
+    ? new Set(collectionBranchKeys.value)
+    : new Set()
 
   collapsedSections.value = nextSections
 
@@ -2156,6 +2195,18 @@ watch(
 /* ── Suchleiste ── */
 .bw-vault__search {
   padding: 0.75rem 0.75rem 0.5rem;
+  border-bottom: 1px solid var(--color-primary-element);
+  background: var(--color-primary-element-light);
+}
+
+.bw-vault__global-search-label {
+  display: block;
+  margin: 0 0 0.35rem 0.15rem;
+  color: var(--color-main-text);
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
 }
 
 .bw-vault__main-search {
@@ -2164,9 +2215,14 @@ watch(
   gap: 0.4rem;
   min-height: 40px;
   padding: 0.25rem 0.4rem;
-  border: 1px solid var(--color-border-dark);
+  border: 1px solid var(--color-primary-element);
   border-radius: var(--border-radius);
   background: var(--color-main-background);
+}
+
+.bw-vault__global-search-icon {
+  flex: 0 0 auto;
+  color: var(--color-primary-element);
 }
 
 .bw-vault__main-search input {
