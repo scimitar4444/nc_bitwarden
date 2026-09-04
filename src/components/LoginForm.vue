@@ -358,18 +358,17 @@ import LockOutlineIcon from 'vue-material-design-icons/LockOutline.vue'
 import { VaultwardenApi } from '../services/api.js'
 import {
   decryptUserSymmetricKey,
-  encryptUserSymmetricKey,
-  generateEncryptedRsaKeyPair,
-  generateUserSymmetricKey,
   makeMasterPasswordHash,
 } from '../services/crypto.js'
 import {
   deriveMasterKey,
-  normalizeKdfParameters,
 } from '../services/kdf.js'
 import {
   unlockUserKeyWithPasskey,
 } from '../services/passkeyPrf.js'
+import {
+  completeInitialSsoSetup,
+} from '../services/ssoOnboarding.js'
 import {
   isExpectedAccount,
 } from '../utils/sessionExpiry.js'
@@ -1108,53 +1107,14 @@ async function createInitialMasterPassword() {
 
   try {
     const result = pendingSsoResult.value
-    const loginData = toPascal(result.loginData ?? {})
-    const ssoEmail = result.email?.trim().toLowerCase() ?? ''
-
-    if (!ssoEmail) {
-      throw new Error(
-        t(
-          'nc_bitwarden',
-          'Vaultwarden did not return an email address.',
-        ),
-      )
-    }
-
-    const masterKeyBuffer = await deriveMasterKey(
-      masterPassword.value,
-      ssoEmail,
-      loginData,
-    )
-
-    const [masterPasswordHash, userKey] = await Promise.all([
-      makeMasterPasswordHash(
-        masterKeyBuffer,
-        masterPassword.value,
+    const completedSetup = await completeInitialSsoSetup({
+      email: result.email,
+      masterPassword: masterPassword.value,
+      loginData: result.loginData ?? {},
+      setMasterPassword: payload => (
+        VaultwardenApi.setMasterPassword(payload)
       ),
-      Promise.resolve(generateUserSymmetricKey()),
-    ])
-
-    const [encryptedUserKey, rsaKeys] = await Promise.all([
-      encryptUserSymmetricKey(userKey, masterKeyBuffer),
-      generateEncryptedRsaKeyPair(userKey),
-    ])
-
-    const kdfParameters = normalizeKdfParameters(
-      loginData,
-    )
-
-    const payload = {
-      kdf: kdfParameters.type,
-      kdfIterations: kdfParameters.iterations,
-      kdfMemory: kdfParameters.memory,
-      kdfParallelism: kdfParameters.parallelism,
-      key: encryptedUserKey,
-      keys: rsaKeys,
-      masterPasswordHash,
-      masterPasswordHint: null,
-    }
-
-    await VaultwardenApi.setMasterPassword(payload)
+    })
 
     pendingSsoResult.value = null
     masterPasswordSetupRequired.value = false
@@ -1162,9 +1122,9 @@ async function createInitialMasterPassword() {
     confirmMasterPassword.value = ''
 
     emit('logged-in', {
-      masterKey: userKey,
+      masterKey: completedSetup.masterKey,
       keepUnlocked: effectiveKeepUnlocked.value,
-      newSsoUser: true,
+      newSsoUser: completedSetup.newSsoUser,
     })
   } catch (exception) {
     error.value = exception.response?.data?.error

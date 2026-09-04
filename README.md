@@ -2,7 +2,7 @@
 
 > Native Bitwarden and Vaultwarden integration for Nextcloud
 
-![Version](https://img.shields.io/badge/Version-2.7.0-blue)
+![Version](https://img.shields.io/badge/Version-2.7.1-blue)
 ![Nextcloud](https://img.shields.io/badge/Nextcloud-31--34-0082C9?logo=nextcloud&logoColor=white)
 ![PHP](https://img.shields.io/badge/PHP-8.1+-777BB4?logo=php&logoColor=white)
 ![License](https://img.shields.io/badge/License-AGPL--3.0-green)
@@ -21,19 +21,17 @@ decrypted vault contents are not sent to Nextcloud.
 
 Warden is an independent integration and is not an official Bitwarden client.
 
-## What's new in 2.7.0
+## What's new in 2.7.1
 
-Warden 2.7.0 streamlines frequent vault actions and makes organization
-collection trees easier to understand.
+Warden 2.7.1 reliably recognizes newly provisioned Vaultwarden SSO accounts
+and directs them to the required first-time master-password setup.
 
-- Login rows and item details provide dedicated password and TOTP quick-copy
-  actions
-- Favorites can be toggled directly from each item row
-- Missing intermediate collection path levels remain visible as safe,
-  navigation-only folders
-- Global search, collection filtering, sorting and hierarchy controls are
-  visually and behaviorally distinct
-- Selected rows and action feedback remain stable while navigating and copying
+- Account state is verified using both the SSO token and the authenticated
+  Vaultwarden profile
+- New users create their master password and cryptographic account keys before
+  the vault opens
+- Existing and contradictory account states never enter the initialization
+  endpoint
 
 For the complete list of changes, see `CHANGELOG.md`.
 
@@ -358,7 +356,7 @@ Extract the application into the Nextcloud application directory:
 
 ```bash
 cd /var/www/html/custom_apps
-tar -xzf nc_bitwarden-2.7.0.tar.gz
+tar -xzf nc_bitwarden-2.7.1.tar.gz
 chown -R www-data:www-data nc_bitwarden
 ```
 
@@ -486,7 +484,7 @@ Example:
 
 ```bash
 docker cp \
-  nc_bitwarden-2.7.0.tar.gz \
+  nc_bitwarden-2.7.1.tar.gz \
   nextcloud-aio-nextcloud:/tmp/
 
 docker exec \
@@ -495,7 +493,7 @@ docker exec \
   sh -c '
     cd /var/www/html/custom_apps &&
     rm -rf nc_bitwarden &&
-    tar -xzf /tmp/nc_bitwarden-2.7.0.tar.gz &&
+    tar -xzf /tmp/nc_bitwarden-2.7.1.tar.gz &&
     chown -R www-data:www-data nc_bitwarden
   '
 

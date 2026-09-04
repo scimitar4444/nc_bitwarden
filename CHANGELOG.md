@@ -2,6 +2,33 @@
 
 All notable changes to Warden are documented in this file.
 
+## 2.7.1 - 2026-09-04
+
+Warden 2.7.1 restores the required first-time setup flow for newly
+provisioned Vaultwarden SSO accounts while protecting existing vaults from
+accidental reinitialization.
+
+### Fixed
+
+- Newly provisioned SSO users without a master password are reliably directed
+  to the existing first-time setup instead of the normal vault unlock dialog
+- First-time setup continues to apply the administrator password policy,
+  generate the user key and RSA key pair, submit Vaultwarden's KDF parameters
+  to `/accounts/set-password`, and open the vault immediately afterwards
+- SSO responses with missing or unexpectedly typed `HasMasterPassword` values
+  are verified against the authenticated Vaultwarden account profile
+
+### Safety and quality
+
+- First-time setup is allowed only when Vaultwarden reports the account as
+  invited and the token plus profile explicitly contain no user key, private
+  key or account-key material
+- Initialized, partially initialized and contradictory account states never
+  call `/accounts/set-password`; contradictory responses fail safely
+- Added regression coverage for current and compatibility response shapes,
+  initialized accounts, contradictory key states and the complete browser-side
+  first-time key setup
+
 ## 2.7.0 - 2026-09-02
 
 Warden 2.7.0 makes frequent vault actions clearer and collection navigation

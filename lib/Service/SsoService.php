@@ -458,22 +458,46 @@ final class SsoService {
 		string $userId,
 		array $data,
 	): array {
+		$stateDetector = new SsoAccountStateDetector();
+		$profile = $this->loadAccountProfile(
+			$userId,
+			(string)($data['access_token'] ?? ''),
+		);
+
+		$accountState = $stateDetector
+			->fromTokenAndProfile($data, $profile);
+
+		if (
+			$accountState
+				=== SsoAccountStateDetector::INCONSISTENT
+		) {
+			throw new \RuntimeException(
+				'Der kryptografische Kontostatus von Vaultwarden ist widersprüchlich. Die Ersteinrichtung wurde zum Schutz bestehender Daten nicht gestartet.',
+			);
+		}
+
 		$decryptionOptions = $data['UserDecryptionOptions']
 			?? $data['userDecryptionOptions']
 			?? [];
 
-		$hasMasterPassword = $decryptionOptions['HasMasterPassword']
-			?? $decryptionOptions['hasMasterPassword']
-			?? null;
+		if (
+			$accountState
+				=== SsoAccountStateDetector::UNINITIALIZED
+		) {
+			$email = trim((string)(
+				$profile['email']
+					?? $profile['Email']
+					?? ''
+			));
 
-		if ($hasMasterPassword === false) {
-			$email = $this->loadAccountEmail(
-				$userId,
-				(string)($data['access_token'] ?? ''),
-			);
+			if ($email === '') {
+				throw new \RuntimeException(
+					'Vaultwarden hat keine E-Mail-Adresse für das neue Konto zurückgegeben.',
+				);
+			}
 
 			return [
-				'email' => $email,
+				'email' => strtolower($email),
 				'requiresMasterPasswordSetup' => true,
 				'masterPasswordPolicy'
 					=> $this->settingsService
@@ -557,10 +581,10 @@ final class SsoService {
 		];
 	}
 
-	private function loadAccountEmail(
+	private function loadAccountProfile(
 		string $userId,
 		string $accessToken,
-	): string {
+	): array {
 		if ($accessToken === '') {
 			throw new \RuntimeException(
 				'Vaultwarden hat kein Zugriffstoken zurückgegeben.',
@@ -588,7 +612,7 @@ final class SsoService {
 			);
 		} catch (\Exception $e) {
 			throw new \RuntimeException(
-				'Die E-Mail-Adresse des neuen Vaultwarden-Kontos konnte nicht geladen werden.',
+				'Das Vaultwarden-Kontoprofil konnte nicht geladen werden.',
 				0,
 				$e,
 			);
@@ -599,17 +623,13 @@ final class SsoService {
 			true,
 		);
 
-		$email = is_array($profile)
-			? trim((string)($profile['email'] ?? $profile['Email'] ?? ''))
-			: '';
-
-		if ($email === '') {
+		if (!is_array($profile)) {
 			throw new \RuntimeException(
-				'Vaultwarden hat keine E-Mail-Adresse für das neue Konto zurückgegeben.',
+				'Vaultwarden hat ein ungültiges Kontoprofil zurückgegeben.',
 			);
 		}
 
-		return strtolower($email);
+		return $profile;
 	}
 
 	private function storeTokens(
