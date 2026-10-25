@@ -2,6 +2,28 @@
 
 All notable changes to Warden are documented in this file.
 
+## 2.7.2 - 2026-10-25
+
+Warden 2.7.2 restores item saving with Vaultwarden 1.37.4.
+
+### Fixed
+
+- Full cipher requests include the required `encryptedFor` field from the
+  loaded Vaultwarden profile, including personal and organization items,
+  inline note edits, new items and ownership transfers
+- Organization items retain their organization owner and encryption key;
+  `encryptedFor` always identifies the signed-in Vaultwarden user
+- Saving stops with a clear message if the loaded vault profile has no user
+  ID, rather than sending an incomplete or incorrectly attributed request
+
+### Compatibility and quality
+
+- Preserve the Nextcloud 35 compatibility already used in production
+- Added regression coverage for real item-form save requests and encryption
+  under both personal and organization keys
+- All 41 JavaScript regression tests, the PHP SSO tests, localization, source
+  and built release preflight, ESLint and the production build passed
+
 ## 2.7.1 - 2026-09-04
 
 Warden 2.7.1 restores the required first-time setup flow for newly
