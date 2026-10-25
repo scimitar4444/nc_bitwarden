@@ -20,7 +20,7 @@
         browser. The master password and plaintext vault contents are not
         transmitted to the Nextcloud server.
     ]]></description>
-    <version>2.7.1</version>
+    <version>2.7.2</version>
     <licence>agpl</licence>
     <author>Christian Thiele / Mission Leben IT</author>
     <author>Philipp Tannich – original author</author>
@@ -29,7 +29,7 @@
     <bugs>https://github.com/scimitar4444/nc_bitwarden/issues</bugs>
     <dependencies>
         <php min-version="8.1"/>
-        <nextcloud min-version="31" max-version="34"/>
+        <nextcloud min-version="31" max-version="35"/>
     </dependencies>
     <navigations>
         <navigation>

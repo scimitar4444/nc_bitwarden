@@ -542,6 +542,7 @@ OC.L10N.register(
     "The TOTP URL does not contain a secret.": "Die TOTP-URL enthält kein Secret.",
     "The TOTP URL is invalid.": "Die TOTP-URL ist ungültig.",
     "The vault or collection assignment cannot be changed because password access is restricted for this item.": "Tresor oder Sammlungszuordnung können nicht geändert werden, weil der Passwortzugriff für diesen Eintrag eingeschränkt ist.",
+    "The vault account could not be identified. Reload the vault and try again.": "Das Tresorkonto konnte nicht ermittelt werden. Lade den Tresor neu und versuche es erneut.",
     "The vault profile does not contain an email address.": "Das Tresorprofil enthält keine E-Mail-Adresse.",
     "The vault profile does not contain the data required to change the master password.": "Das Tresorprofil enthält nicht die für den Master-Passwortwechsel erforderlichen Daten.",
     "This address is used for the classic Bitwarden/Vaultwarden login.": "Diese Adresse wird für die klassische Bitwarden-/Vaultwarden-Anmeldung verwendet.",

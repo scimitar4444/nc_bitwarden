@@ -1052,6 +1052,7 @@ import {
 
 const props = defineProps({
   userKey: { type: Object, required: true },
+  vaultUserId: { type: String, required: true },
   item: { type: Object, default: null },
   folders: { type: Array, default: () => [] },
   collections: { type: Array, default: () => [] },
@@ -1970,9 +1971,23 @@ async function encryptedPasskeys(key) {
 }
 
 async function buildPayload() {
+  const vaultUserId = String(props.vaultUserId ?? '').trim()
+
+  if (!vaultUserId) {
+    throw new Error(
+      t(
+        'nc_bitwarden',
+        'The vault account could not be identified. Reload the vault and try again.',
+      ),
+    )
+  }
+
   const encryptionKey = getEncryptionKey()
   if (!encryptionKey) throw new Error(t('nc_bitwarden', 'The required encryption key is not available.'))
   const payload = {
+    // Vaultwarden expects the signed-in vault user's ID here, including
+    // organization items. The owner and encryption key are set separately.
+    encryptedFor: vaultUserId,
     type: Number(selectedType.value),
     name: await encrypt(form.name.trim(), encryptionKey),
     notes: form.notes ? await encrypt(form.notes, encryptionKey) : null,

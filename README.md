@@ -2,8 +2,8 @@
 
 > Native Bitwarden and Vaultwarden integration for Nextcloud
 
-![Version](https://img.shields.io/badge/Version-2.7.1-blue)
-![Nextcloud](https://img.shields.io/badge/Nextcloud-31--34-0082C9?logo=nextcloud&logoColor=white)
+![Version](https://img.shields.io/badge/Version-2.7.2-blue)
+![Nextcloud](https://img.shields.io/badge/Nextcloud-31--35-0082C9?logo=nextcloud&logoColor=white)
 ![PHP](https://img.shields.io/badge/PHP-8.1+-777BB4?logo=php&logoColor=white)
 ![License](https://img.shields.io/badge/License-AGPL--3.0-green)
 
@@ -21,17 +21,17 @@ decrypted vault contents are not sent to Nextcloud.
 
 Warden is an independent integration and is not an official Bitwarden client.
 
-## What's new in 2.7.1
+## What's new in 2.7.2
 
-Warden 2.7.1 reliably recognizes newly provisioned Vaultwarden SSO accounts
-and directs them to the required first-time master-password setup.
+Warden 2.7.2 restores item saving with Vaultwarden 1.37.4 by including the
+required `encryptedFor` account identifier in full cipher requests.
 
-- Account state is verified using both the SSO token and the authenticated
-  Vaultwarden profile
-- New users create their master password and cryptographic account keys before
-  the vault opens
-- Existing and contradictory account states never enter the initialization
-  endpoint
+- Personal and organization items, inline notes and ownership transfers use
+  the ID from the loaded Vaultwarden profile
+- Organization ownership and encryption keys remain separate from the account
+  identifier
+- Missing account identities stop saving with a clear message while keeping
+  unsaved changes available
 
 For the complete list of changes, see `CHANGELOG.md`.
 
@@ -341,7 +341,7 @@ the user and Warden's WebAuthn-PRF integration unlocks the encrypted vault.
 
 | Component | Requirement |
 |---|---|
-| Nextcloud | 31, 32, 33 or 34 |
+| Nextcloud | 31, 32, 33, 34 or 35 |
 | PHP | 8.1 or newer |
 | Browser | Current browser with Web Crypto; WebAuthn PRF is required for passkey vault unlock |
 | HTTPS | Required for production operation |
@@ -356,7 +356,7 @@ Extract the application into the Nextcloud application directory:
 
 ```bash
 cd /var/www/html/custom_apps
-tar -xzf nc_bitwarden-2.7.1.tar.gz
+tar -xzf nc_bitwarden-2.7.2.tar.gz
 chown -R www-data:www-data nc_bitwarden
 ```
 
@@ -484,7 +484,7 @@ Example:
 
 ```bash
 docker cp \
-  nc_bitwarden-2.7.1.tar.gz \
+  nc_bitwarden-2.7.2.tar.gz \
   nextcloud-aio-nextcloud:/tmp/
 
 docker exec \
@@ -493,7 +493,7 @@ docker exec \
   sh -c '
     cd /var/www/html/custom_apps &&
     rm -rf nc_bitwarden &&
-    tar -xzf /tmp/nc_bitwarden-2.7.1.tar.gz &&
+    tar -xzf /tmp/nc_bitwarden-2.7.2.tar.gz &&
     chown -R www-data:www-data nc_bitwarden
   '
 
